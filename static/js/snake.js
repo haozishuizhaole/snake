@@ -654,7 +654,17 @@ function updateAIGame() {
     // 优先选择安全的移动方向
     const possibleMoves = getPossibleMoves();
     if (possibleMoves.length === 0) {
-        stopAIGame();
+        handleAIGameOver();
+        return;
+    }
+    
+    // 检查是否会撞墙
+    const newHead = {
+        x: head.x + dx,
+        y: head.y + dy
+    };
+    if (newHead.x < 0 || newHead.x >= tileCount || newHead.y < 0 || newHead.y >= tileCount) {
+        handleAIGameOver();
         return;
     }
     
@@ -664,11 +674,11 @@ function updateAIGame() {
     dy = bestMove.y;
     
     // 更新游戏状态
-    const newHead = {x: head.x + dx, y: head.y + dy};
-    snake.unshift(newHead);
+    const newHeadPos = {x: head.x + dx, y: head.y + dy};
+    snake.unshift(newHeadPos);
     
     // 检查是否吃到食物
-    if (newHead.x === food.x && newHead.y === food.y) {
+    if (newHeadPos.x === food.x && newHeadPos.y === food.y) {
         generateFood();
     } else {
         snake.pop();
@@ -715,12 +725,29 @@ function chooseBestMove(possibleMoves, foodDir) {
     return distances[0].move;
 }
 
-// 停止 AI 游戏
-function stopAIGame() {
+// 添加 AI 游戏结束处理函数
+function handleAIGameOver() {
+    // 停止当前游戏循环
     if (aiGameLoop) {
         clearInterval(aiGameLoop);
         aiGameLoop = null;
     }
-    isAIPlaying = false;
+    
+    // 等待 2 秒后重新开始
+    setTimeout(() => {
+        if (isAIPlaying) { // 确保还在 AI 模式
+            resetGame();
+            aiGameLoop = setInterval(updateAIGame, 100);
+        }
+    }, 2000);
+}
+
+// 修改停止 AI 游戏函数
+function stopAIGame() {
+    isAIPlaying = false; // 先设置标志，防止重启
+    if (aiGameLoop) {
+        clearInterval(aiGameLoop);
+        aiGameLoop = null;
+    }
     resetGame();
 } 

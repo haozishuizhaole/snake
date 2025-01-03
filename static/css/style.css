@@ -771,9 +771,13 @@ button:hover::after {
 }
 
 .replay-icon {
-    opacity: 0;
+    cursor: pointer;
     transition: opacity 0.3s ease;
-    margin-left: 10px;
+}
+
+.replay-icon[disabled] {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .ranking-item:hover .replay-icon {

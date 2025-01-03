@@ -460,31 +460,40 @@ class Confetti {
 const confetti = new Confetti(document.getElementById('confettiCanvas'));
 
 function gameOver() {
-    clearInterval(gameLoop);
-    if (countdownTimer) {
-        clearTimeout(countdownTimer);
-        countdownTimer = null;
+    if (gameLoop) {
+        clearInterval(gameLoop);
+        gameLoop = null;
     }
-    gameLoop = null;
     gameStarted = false;
     lastGameEndTime = Date.now();
-    document.getElementById('finalScore').textContent = score;
-    document.getElementById('playerNameDisplay').textContent = playerName;
-    
-    // 检查是否破纪录
-    const newRecord = document.getElementById('newRecord');
-    // 只有当前分数大于历史最高分时才显示破纪录提示
-    if (score > personalBestScore) {
-        newRecord.style.display = 'block';
-        personalBestScore = score;  // 更新最高分
-        confetti.startSpecial();    // 触发特殊特效
-    } else {
-        newRecord.style.display = 'none';
-        confetti.start();          // 触发普通特效
-    }
-    
-    document.getElementById('gameOver').style.display = 'block';
-    // 自动提交分数
+
+    // 获取当前最高分进行比较
+    fetch('/get-scores')
+        .then(response => response.json())
+        .then(scores => {
+            // 获取历史最高分
+            const highestScore = scores.length > 0 ? Math.max(...scores.map(s => s.score)) : 0;
+            const isNewRecord = score > highestScore;
+
+            // 显示游戏结束界面
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.style.display = 'block';
+            
+            // 只有在真正打破记录时才显示特效
+            if (isNewRecord) {
+                startConfetti();
+                document.getElementById('newRecord').style.display = 'block';
+            } else {
+                document.getElementById('newRecord').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('获取最高分失败:', error);
+            // 出错时保守处理，不显示破纪录提示
+            document.getElementById('newRecord').style.display = 'none';
+        });
+
+    // 提交分数
     submitScore();
 }
 
@@ -543,17 +552,22 @@ async function updateScoreboard() {
                     prefix = '🥉';
                     className = 'bronze';
                 }
-
+                
                 // 对回放数据进行编码
                 const encodedReplay = score.replay ? 
                     encodeURIComponent(score.replay) : '[]';
                 
                 return `
-                    <div class="ranking-item ${className}" data-replay="${encodedReplay}">
+                    <div class="ranking-item ${className}">
                         <span class="rank">${prefix}</span>
                         <span class="player-name">${score.name || '未知玩家'}</span>
                         <span class="player-score">${score.score || 0}</span>
-                        <span class="replay-icon" title="点击观看回放" onclick="startReplay(this.parentElement.dataset.replay)">▶️</span>
+                        ${score.replay && score.replay !== '[]' ? 
+                            `<span class="replay-icon" 
+                                title="点击观看回放" 
+                                onclick="handleReplayClick(this, '${encodedReplay}')"
+                                data-replay="${encodedReplay}">▶️</span>` : 
+                            ''}
                     </div>
                 `;
             })
@@ -577,6 +591,117 @@ async function updateScoreboard() {
             rankings.innerHTML = '<div class="ranking-item error">获取排行榜失败，请稍后再试</div>';
         }
     }
+}
+
+// 修改回放点击处理函数
+function handleReplayClick(element, encodedReplayData) {
+    // 检查是否正在回放中
+    if (isReplaying) {
+        return;
+    }
+    
+    // 禁用点击
+    element.style.opacity = '0.5';
+    element.style.pointerEvents = 'none';
+    
+    // 开始回放并处理完成后的状态
+    startReplay(encodedReplayData, element);
+}
+
+// 修改回放函数
+function startReplay(encodedReplayData, replayButton) {
+    try {
+        const replayData = decodeURIComponent(encodedReplayData);
+        
+        if (!replayData || replayData === '[]') {
+            alert('暂无回放数据');
+            resetReplayButton(replayButton);
+            return;
+        }
+
+        isReplaying = true;
+        const steps = JSON.parse(replayData);
+        
+        if (!Array.isArray(steps) || steps.length === 0) {
+            alert('回放数据无效');
+            isReplaying = false;
+            resetReplayButton(replayButton);
+            return;
+        }
+
+        let stepIndex = 0;
+        
+        // 隐藏开始界面
+        document.getElementById('startScreen').style.display = 'none';
+        
+        // 停止 AI 游戏
+        stopAIGame();
+        
+        // 添加回放提示
+        const replayIndicator = document.createElement('div');
+        replayIndicator.className = 'replaying';
+        
+        // 获取玩家昵称和分数
+        const playerItem = replayButton.closest('.ranking-item');
+        const playerName = playerItem.querySelector('.player-name').textContent;
+        const playerScore = playerItem.querySelector('.player-score').textContent;
+        
+        // 构建提示文字
+        replayIndicator.innerHTML = `
+            <span class="replay-icon">🎬</span>
+            <span class="replay-text">正在回放 <strong>${playerName}</strong> 的精彩记录</span>
+            <span class="replay-score">${playerScore}分</span>
+        `;
+        
+        document.querySelector('.game-area').appendChild(replayIndicator);
+        
+        function playNextStep() {
+            if (stepIndex >= steps.length) {
+                isReplaying = false;
+                document.getElementById('startScreen').style.display = 'block';
+                replayIndicator.remove();
+                resetReplayButton(replayButton);
+                return;
+            }
+            
+            const step = steps[stepIndex];
+            snake = JSON.parse(JSON.stringify(step.snake));
+            food = {...step.food};
+            score = step.score;
+            dx = step.dx;
+            dy = step.dy;
+            
+            document.getElementById('scoreSpan').textContent = score;
+            draw();
+            
+            stepIndex++;
+            setTimeout(playNextStep, 100);  // 控制回放速度
+        }
+        
+        playNextStep();
+        
+    } catch (error) {
+        console.error('回放错误:', error);
+        alert('回放出错，请稍后再试');
+        isReplaying = false;
+        document.getElementById('startScreen').style.display = 'block';
+        resetReplayButton(replayButton);
+    }
+}
+
+// 添加重置回放按钮状态的辅助函数
+function resetReplayButton(button) {
+    if (!button) return;
+    
+    // 重置按钮状态
+    button.style.opacity = '1';
+    button.style.pointerEvents = 'auto';
+    
+    // 重置所有回放按钮
+    document.querySelectorAll('.replay-icon').forEach(icon => {
+        icon.style.opacity = '1';
+        icon.style.pointerEvents = 'auto';
+    });
 }
 
 // 修改压缩函数，记录所有关键状态

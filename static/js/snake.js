@@ -575,6 +575,8 @@ function update() {
     if (head.x === food.x && head.y === food.y) {
         score += 10;
         document.getElementById('scoreSpan').textContent = score;
+        // 添加积分特效
+        showScoreEffect(food.x, food.y, 10);
         generateFood();
     } else {
         snake.pop();
@@ -764,7 +766,7 @@ function changeDirection(event) {
         y: head.y + newDy
     };
 
-    // 检查是否会撞墙或撞到自己（除了尾部）
+    // 检查是否会撞墙或撞到自己（除了尾巴）
     const willEatFood = nextPos.x === food.x && nextPos.y === food.y;
     const snakeBody = willEatFood ? snake : snake.slice(0, -1);
     
@@ -1791,4 +1793,275 @@ async function submitScore() {
     await updateGameStats();
     
     // ... 现有代码 ...
-} 
+}
+
+// 添加积分特效函数
+function showScoreEffect(x, y, score) {
+    const gameArea = document.querySelector('.game-area');
+    const effect = document.createElement('div');
+    effect.className = 'score-effect';
+    effect.textContent = `+${score}`;
+    
+    // 计算相对于游戏区域的位置
+    const canvas = document.getElementById('gameCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const gameRect = gameArea.getBoundingClientRect();
+    
+    // 将网格坐标转换为像素坐标
+    const pixelX = x * gridSize + rect.left - gameRect.left;
+    const pixelY = y * gridSize + rect.top - gameRect.top;
+    
+    // 设置初始位置
+    effect.style.left = `${pixelX}px`;
+    effect.style.top = `${pixelY}px`;
+    
+    gameArea.appendChild(effect);
+    
+    // 添加动画结束监听器
+    effect.addEventListener('animationend', () => {
+        effect.remove();
+    });
+}
+
+// 将 confetti 实例和触发函数暴露到全局
+window.confetti = confetti;
+
+// 添加一个全局的触发撒花函数
+window.triggerConfetti = function(duration = 5000) {
+    confetti.start();
+    setTimeout(() => confetti.stop(), duration);
+};
+
+// 添加一个全局的高级礼花特效函数
+window.triggerFancyConfetti = function(options = {}) {
+    const defaults = {
+        duration: 5000,    // 持续时间
+        particleCount: 150,  // 粒子数量
+        spread: 70,        // 扩散范围
+        startVelocity: 30, // 初始速度
+        colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']  // 彩色粒子
+    };
+
+    const settings = { ...defaults, ...options };
+    
+    // 停止之前的特效
+    confetti.stop();
+    
+    // 创建新的粒子
+    const particles = [];
+    for (let i = 0; i < settings.particleCount; i++) {
+        particles.push({
+            x: Math.random() * window.innerWidth,
+            y: window.innerHeight + 10,
+            size: Math.random() * 5 + 5,
+            color: settings.colors[Math.floor(Math.random() * settings.colors.length)],
+            speedX: (Math.random() - 0.5) * settings.spread,
+            speedY: -Math.random() * settings.startVelocity,
+            rotation: Math.random() * 360,
+            rotationSpeed: (Math.random() - 0.5) * 10
+        });
+    }
+    
+    // 更新粒子动画
+    confetti.particles = particles;
+    confetti.start();
+    
+    // 设置定时器停止特效
+    setTimeout(() => confetti.stop(), settings.duration);
+};
+
+// 添加一些预设的特效模式
+window.confettiEffects = {
+    // 瀑布效果
+    waterfall: () => {
+        triggerFancyConfetti({
+            particleCount: 200,
+            spread: 30,
+            startVelocity: 15,
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#FF69B4', '#DDA0DD']
+        });
+    },
+    
+    // 爆炸效果
+    explosion: () => {
+        triggerFancyConfetti({
+            particleCount: 300,
+            spread: 100,
+            startVelocity: 45,
+            colors: ['#FF0000', '#FF69B4', '#FF4500', '#FFD700', '#FF6347']
+        });
+    },
+    
+    // 彩虹效果
+    rainbow: () => {
+        triggerFancyConfetti({
+            particleCount: 250,
+            spread: 60,
+            startVelocity: 35,
+            colors: ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#8B00FF']
+        });
+    },
+    
+    // 金色庆典效果
+    golden: () => {
+        triggerFancyConfetti({
+            particleCount: 180,
+            spread: 50,
+            startVelocity: 25,
+            colors: ['#FFD700', '#FFA500', '#DAA520', '#B8860B', '#CD853F']
+        });
+    }
+};
+
+// 添加烟花特效函数
+window.triggerFireworks = function(options = {}) {
+    const defaults = {
+        duration: 5000,      // 持续时间
+        rocketCount: 5,      // 烟花发射数量
+        particlesPerRocket: 50,  // 每个烟花爆炸后的粒子数
+        colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']
+    };
+
+    const settings = { ...defaults, ...options };
+    
+    // 停止之前的特效
+    confetti.stop();
+    
+    // 发射烟花
+    function launchRocket() {
+        // 烟花起始位置（底部随机位置）
+        const startX = Math.random() * window.innerWidth;
+        const endX = startX + (Math.random() - 0.5) * 200;  // 轻微偏移
+        const endY = 200 + Math.random() * (window.innerHeight * 0.5);  // 爆炸高度
+        
+        // 创建上升的火箭
+        const rocket = {
+            x: startX,
+            y: window.innerHeight,
+            targetX: endX,
+            targetY: endY,
+            color: settings.colors[Math.floor(Math.random() * settings.colors.length)],
+            size: 3,
+            phase: 'rising'  // rising 或 exploding
+        };
+        
+        // 火箭上升动画
+        const riseInterval = setInterval(() => {
+            // 更新火箭位置
+            const dx = (rocket.targetX - rocket.x) * 0.05;
+            const dy = (rocket.targetY - rocket.y) * 0.05;
+            rocket.x += dx;
+            rocket.y += dy;
+            
+            // 检查是否到达目标高度
+            if (Math.abs(rocket.y - rocket.targetY) < 10) {
+                clearInterval(riseInterval);
+                // 爆炸效果
+                explodeRocket(rocket);
+            }
+            
+            // 绘制上升轨迹
+            confetti.particles = [{
+                x: rocket.x,
+                y: rocket.y,
+                size: rocket.size,
+                color: rocket.color,
+                speedX: 0,
+                speedY: -2,
+                phase: 'rising'
+            }];
+            confetti.start();
+        }, 20);
+    }
+    
+    // 烟花爆炸效果
+    function explodeRocket(rocket) {
+        const particles = [];
+        for (let i = 0; i < settings.particlesPerRocket; i++) {
+            const angle = (Math.PI * 2 * i) / settings.particlesPerRocket;
+            const velocity = 5 + Math.random() * 5;
+            const particle = {
+                x: rocket.x,
+                y: rocket.y,
+                size: 2 + Math.random() * 2,
+                color: rocket.color,
+                speedX: Math.cos(angle) * velocity,
+                speedY: Math.sin(angle) * velocity,
+                phase: 'exploding',
+                alpha: 1,
+                rotation: Math.random() * 360,
+                rotationSpeed: (Math.random() - 0.5) * 10
+            };
+            particles.push(particle);
+        }
+        
+        // 爆炸动画
+        let frame = 0;
+        const explodeInterval = setInterval(() => {
+            frame++;
+            particles.forEach(particle => {
+                // 更新粒子位置
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.speedY += 0.1;  // 重力效果
+                particle.alpha -= 0.02;  // 淡出效果
+                
+                if (particle.alpha <= 0) {
+                    particle.alpha = 0;
+                }
+            });
+            
+            // 更新粒子
+            confetti.particles = particles.filter(p => p.alpha > 0);
+            confetti.start();
+            
+            // 结束动画
+            if (frame > 50) {
+                clearInterval(explodeInterval);
+            }
+        }, 20);
+    }
+    
+    // 发射多个烟花
+    let rocketLaunched = 0;
+    const launchInterval = setInterval(() => {
+        launchRocket();
+        rocketLaunched++;
+        if (rocketLaunched >= settings.rocketCount) {
+            clearInterval(launchInterval);
+        }
+    }, 300);
+    
+    // 设置定时器停止特效
+    setTimeout(() => confetti.stop(), settings.duration);
+};
+
+// 添加预设烟花效果
+window.fireworkEffects = {
+    // 节日庆典
+    celebration: () => {
+        triggerFireworks({
+            rocketCount: 8,
+            particlesPerRocket: 60,
+            colors: ['#FFD700', '#FF0000', '#00FF00', '#0000FF', '#FF00FF']
+        });
+    },
+    
+    // 金色盛典
+    golden: () => {
+        triggerFireworks({
+            rocketCount: 5,
+            particlesPerRocket: 50,
+            colors: ['#FFD700', '#FFA500', '#DAA520', '#B8860B']
+        });
+    },
+    
+    // 彩虹烟花
+    rainbow: () => {
+        triggerFireworks({
+            rocketCount: 7,
+            particlesPerRocket: 40,
+            colors: ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#8B00FF']
+        });
+    }
+}; 

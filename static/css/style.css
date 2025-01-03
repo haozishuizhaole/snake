@@ -54,7 +54,7 @@ body {
     top: 20px;
     left: 0;
     right: 0;
-    z-index: 2;
+    z-index: 111111;
     display: flex;
     justify-content: space-between;
     padding: 0 25px;
@@ -128,8 +128,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    z-index: 9999;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 10;
 }
 
 #confettiCanvas {
@@ -139,7 +139,7 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 9998;
+    z-index: 99999;
 }
 
 .modal-content {
@@ -150,7 +150,7 @@ body {
     text-align: center;
     border-radius: 5px;
     position: relative;
-    z-index: 10000;
+    z-index: 100001;
     min-height: 200px;
     display: flex;
     flex-direction: column;
@@ -206,7 +206,7 @@ button:hover::after {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1;
+    z-index: 99998;
     display: block;
     background-color: rgba(255, 255, 255, 0.5);
 }
@@ -392,7 +392,7 @@ button:hover::after {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999;
+    z-index: 99998;
 }
 
 .welcome-content {
@@ -524,7 +524,7 @@ button:hover::after {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1;
+    z-index: 99998;
     display: block;
     background-color: rgba(255, 255, 255, 0.5);
 }
@@ -1240,7 +1240,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-badge::before,
@@ -1255,7 +1255,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-badge:hover::after,
@@ -1462,7 +1462,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-item::before {
@@ -1476,7 +1476,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-item:hover {
@@ -1545,7 +1545,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-badge::before {
@@ -1559,7 +1559,7 @@ button:hover::after {
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .stat-badge:hover::after {
@@ -1653,4 +1653,63 @@ button:hover::after {
     align-items: center;
     justify-content: center;
     line-height: 1;
+} 
+
+/* 添加积分特效样式 */
+.score-effect {
+    position: absolute;
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 20px;
+    pointer-events: none;
+    z-index: 100;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    animation: scoreFloat 0.8s ease-out forwards;
+    opacity: 0;
+}
+
+/* 积分上浮动画 */
+@keyframes scoreFloat {
+    0% {
+        transform: translate(-50%, 0) scale(0.5);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(-50%, -10px) scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50px) scale(1);
+        opacity: 0;
+    }
+}
+
+/* 添加发光效果 */
+.score-effect::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(76, 175, 80, 0.2) 0%, transparent 70%);
+    filter: blur(4px);
+    z-index: -1;
+    animation: glowPulse 0.8s ease-out;
+}
+
+@keyframes glowPulse {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.5);
+        opacity: 0.5;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(2);
+        opacity: 0;
+    }
 } 

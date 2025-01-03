@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/hmac"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
@@ -63,6 +64,12 @@ const (
 	maxOpenConns    = 25              // 最大打开连接数
 	maxIdleConns    = 5               // 最大空闲连接数
 	connMaxLifetime = 5 * time.Minute // 连接最大生命周期
+
+	// 作弊检测相关常量
+	MIN_MOVE_INTERVAL  = 30  // 降低最小移动间隔（毫秒）
+	MAX_PERFECT_MOVES  = 100 // 增加允许的完美移动次数
+	MAX_SCORE_PER_FOOD = 10  // 每个食物最大得分
+	MIN_GAME_DURATION  = 1   // 降低最短游戏时长（秒）
 )
 
 var (
@@ -77,6 +84,27 @@ type sessionInfo struct {
 	LastScore  int
 	LastSubmit time.Time
 	ExpiresAt  time.Time // 添加过期时间字段
+}
+
+// 添加回放步骤结构
+type GameStep struct {
+	Snake []Position `json:"snake"`
+	Food  Position   `json:"food"`
+	Dx    int        `json:"dx"`
+	Dy    int        `json:"dy"`
+	Score int        `json:"score"`
+}
+
+type Position struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// 添加作弊检测结果结构
+type CheatDetectionResult struct {
+	IsValid    bool
+	Reason     string
+	Violations []string
 }
 
 func initDB() error {
@@ -217,7 +245,11 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 
 	// 验证时间戳
 	now := time.Now().Unix()
-	if abs(now-submission.Timestamp) > maxTimeDiff {
+	diff := now - submission.Timestamp
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > maxTimeDiff {
 		http.Error(w, "Invalid timestamp", http.StatusBadRequest)
 		return
 	}
@@ -227,6 +259,14 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("Failed to compress replay: %v\n", err)
 		http.Error(w, "Failed to process replay data", http.StatusInternalServerError)
+		return
+	}
+
+	// 检查作弊行为
+	cheatResult := detectCheating(submission.Replay, submission.Score)
+	if !cheatResult.IsValid {
+		fmt.Printf("Cheat detected: %v\n", cheatResult.Violations)
+		http.Error(w, cheatResult.Reason, http.StatusBadRequest)
 		return
 	}
 
@@ -376,7 +416,7 @@ func handleGetReplay(w http.ResponseWriter, r *http.Request) {
 // 生成会话ID
 func generateSessionID() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	crand.Read(b)
 	return base64.URLEncoding.EncodeToString(b)
 }
 
@@ -395,12 +435,29 @@ func validateScoreHash(submission ScoreSubmission) bool {
 	return hmac.Equal([]byte(submission.Hash), []byte(expectedHash))
 }
 
-// 添加辅助函数
-func abs(n int64) int64 {
+// 添加一个新的整数版本的 abs 函数
+func absInt(n int) int {
 	if n < 0 {
 		return -n
 	}
 	return n
+}
+
+// 修改检查移动是否合法的函数
+func isValidMove(prev, curr GameStep) bool {
+	// 检查方向变化是否合法（放宽标准）
+	if absInt(curr.Dx-prev.Dx) > 2 || absInt(curr.Dy-prev.Dy) > 2 {
+		return false
+	}
+
+	// 检查蛇头位置变化是否合法（放宽标准）
+	head1 := prev.Snake[0]
+	head2 := curr.Snake[0]
+	if absInt(head2.X-head1.X) > 2 || absInt(head2.Y-head1.Y) > 2 {
+		return false
+	}
+
+	return true
 }
 
 // 添加压缩函数
@@ -462,9 +519,18 @@ func validateRequest(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if !validateTimestamp(ts) {
+			http.Error(w, "Request expired", http.StatusBadRequest)
+			return
+		}
+
 		// 检查时间戳是否在有效期内
 		now := time.Now().Unix()
-		if abs(now-ts) > maxTimeDiff {
+		diff := now - ts
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > maxTimeDiff {
 			http.Error(w, "Request expired", http.StatusBadRequest)
 			return
 		}
@@ -523,4 +589,141 @@ func cleanupSessions() {
 
 		sessionsMap.Unlock()
 	}
+}
+
+// 添加作弊检测函数
+func detectCheating(replayData string, finalScore int) CheatDetectionResult {
+	var steps []GameStep
+	if err := json.Unmarshal([]byte(replayData), &steps); err != nil {
+		return CheatDetectionResult{
+			IsValid: false,
+			Reason:  "回放数据无效",
+		}
+	}
+
+	violations := []string{}
+
+	// 1. 检查游戏时长（只在得分大于0时检查）
+	if finalScore > 0 {
+		gameDuration := len(steps) * 100 // 每步100ms
+		if gameDuration < MIN_GAME_DURATION*1000 {
+			violations = append(violations, "游戏时长过短")
+		}
+	}
+
+	// 2. 检查移动间隔和完美移动
+	perfectMoveCount := 0
+	for i := 1; i < len(steps); i++ {
+		// 检查移动是否合法（放宽检查标准）
+		if !isValidMove(steps[i-1], steps[i]) {
+			// 只在非碰撞情况下检查
+			if len(steps) > i+1 {
+				violations = append(violations, "存在非法移动")
+			}
+		}
+
+		// 检查完美移动（只在连续移动时检查）
+		if isPerfectMove(steps[i-1], steps[i]) {
+			perfectMoveCount++
+			if perfectMoveCount > MAX_PERFECT_MOVES {
+				violations = append(violations, "完美移动次数过多")
+				break
+			}
+		} else {
+			perfectMoveCount = 0
+		}
+	}
+
+	// 3. 检查得分合理性
+	if finalScore > 0 {
+		foodCount := countFoodEaten(steps)
+		if finalScore > foodCount*MAX_SCORE_PER_FOOD {
+			violations = append(violations, "得分异常")
+		}
+	}
+
+	// 4. 检查蛇的移动连续性（只在非碰撞情况下检查）
+	if len(steps) > 2 && finalScore > 0 {
+		if !validateSnakeMovement(steps[:len(steps)-1]) {
+			violations = append(violations, "蛇的移动轨迹异常")
+		}
+	}
+
+	// 根据违规情况返回结果（需要多个违规才判定为作弊）
+	if len(violations) > 1 {
+		return CheatDetectionResult{
+			IsValid:    false,
+			Reason:     getRandomCheatMessage(),
+			Violations: violations,
+		}
+	}
+
+	return CheatDetectionResult{IsValid: true}
+}
+
+// 检查是否是完美移动
+func isPerfectMove(prev, curr GameStep) bool {
+	head := curr.Snake[0]
+	food := curr.Food
+
+	// 检查是否朝着食物方向移动
+	isOptimalX := (food.X > head.X && curr.Dx > 0) || (food.X < head.X && curr.Dx < 0)
+	isOptimalY := (food.Y > head.Y && curr.Dy > 0) || (food.Y < head.Y && curr.Dy < 0)
+
+	return isOptimalX || isOptimalY
+}
+
+// 统计吃到的食物数量
+func countFoodEaten(steps []GameStep) int {
+	foodCount := 0
+	for i := 1; i < len(steps); i++ {
+		if len(steps[i].Snake) > len(steps[i-1].Snake) {
+			foodCount++
+		}
+	}
+	return foodCount
+}
+
+// 修改验证蛇的移动连续性的函数
+func validateSnakeMovement(steps []GameStep) bool {
+	for i := 1; i < len(steps); i++ {
+		curr := steps[i]
+
+		// 检查蛇身的连续性
+		for j := 0; j < len(curr.Snake)-1; j++ {
+			dx := absInt(curr.Snake[j].X - curr.Snake[j+1].X)
+			dy := absInt(curr.Snake[j].Y - curr.Snake[j+1].Y)
+			if dx+dy != 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// 修改随机消息函数，添加 math/rand 包的导入
+func init() {
+	// 初始化随机数生成器
+	rand.Seed(time.Now().UnixNano())
+}
+
+func getRandomCheatMessage() string {
+	messages := []string{
+		"检测到异常操作，要诚信游戏哦~ 😊",
+		"这次的分数可能有点问题，再来一局吧！ 🎮",
+		"游戏要公平才有趣，继续加油！ 💪",
+		"存在作弊嫌疑，本次分数无效~ 🚫",
+		"要相信自己，不需要使用外挂！ ⭐",
+	}
+	return messages[rand.Intn(len(messages))]
+}
+
+// 修改时间戳验证函数
+func validateTimestamp(ts int64) bool {
+	now := time.Now().Unix()
+	diff := now - ts
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= maxTimeDiff
 }

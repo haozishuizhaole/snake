@@ -14,6 +14,8 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +54,10 @@ const (
 	secretKey   = "your-secret-key-here"
 	minInterval = 2
 	maxTimeDiff = 3
+
+	// 会话相关的常量
+	sessionTimeout  = 30 * time.Minute // 会话超时时间
+	cleanupInterval = 5 * time.Minute  // 清理间隔
 )
 
 var (
@@ -64,6 +70,7 @@ type sessionInfo struct {
 	StartTime  time.Time
 	LastScore  int
 	LastSubmit time.Time
+	ExpiresAt  time.Time // 添加过期时间字段
 }
 
 func initDB() error {
@@ -115,11 +122,15 @@ func main() {
 	// 路由处理
 	r.HandleFunc("/", handleGame)
 	r.HandleFunc("/submit-score", handleSubmitScore)
-	r.HandleFunc("/get-scores", handleGetScores)
-	r.HandleFunc("/get-replay", handleGetReplay)
+	r.HandleFunc("/get-scores", validateRequest(handleGetScores))
+	r.HandleFunc("/get-replay", validateRequest(handleGetReplay))
 
 	port := 8080
 	fmt.Printf("Server starting at http://localhost:%d\n", port)
+
+	// 启动会话清理协程
+	go cleanupSessions()
+
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), r); err != nil {
 		fmt.Printf("Server failed to start: %v\n", err)
 	}
@@ -129,8 +140,10 @@ func handleGame(w http.ResponseWriter, r *http.Request) {
 	sessionID := generateSessionID()
 	sessionsMap.Lock()
 	sessions[sessionID] = sessionInfo{
-		StartTime: time.Now(),
-		LastScore: 0,
+		StartTime:  time.Now(),
+		LastScore:  0,
+		LastSubmit: time.Time{}, // 使用零值时间
+		ExpiresAt:  time.Now().Add(sessionTimeout),
 	}
 	sessionsMap.Unlock()
 
@@ -156,17 +169,26 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 验证会话
-	sessionsMap.RLock()
+	sessionsMap.Lock()
 	session, exists := sessions[submission.SessionID]
-	sessionsMap.RUnlock()
+	if exists {
+		// 验证提交间隔
+		if time.Since(session.LastSubmit).Seconds() < minInterval && session.LastScore > 0 {
+			sessionsMap.Unlock()
+			http.Error(w, "Please wait before submitting again", http.StatusTooManyRequests)
+			return
+		}
+
+		// 更新会话信息
+		session.LastSubmit = time.Now()
+		session.LastScore = submission.Score
+		session.ExpiresAt = time.Now().Add(sessionTimeout)
+		sessions[submission.SessionID] = session
+	}
+	sessionsMap.Unlock()
+
 	if !exists {
 		http.Error(w, "Invalid session", http.StatusBadRequest)
-		return
-	}
-
-	// 验证提交间隔
-	if time.Since(session.LastSubmit).Seconds() < minInterval {
-		http.Error(w, "Please wait before submitting again", http.StatusTooManyRequests)
 		return
 	}
 
@@ -356,4 +378,88 @@ func decompressReplay(compressed string) (string, error) {
 	}
 
 	return string(decompressed), nil
+}
+
+// 添加请求验证中间件
+func validateRequest(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 获取请求参数
+		timestamp := r.URL.Query().Get("timestamp")
+		nonce := r.URL.Query().Get("nonce")
+		signature := r.URL.Query().Get("signature")
+
+		// 验证参数是否存在
+		if timestamp == "" || nonce == "" || signature == "" {
+			http.Error(w, "Missing required parameters", http.StatusBadRequest)
+			return
+		}
+
+		// 验证时间戳
+		ts, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid timestamp", http.StatusBadRequest)
+			return
+		}
+
+		// 检查时间戳是否在有效期内
+		now := time.Now().Unix()
+		if abs(now-ts) > maxTimeDiff {
+			http.Error(w, "Request expired", http.StatusBadRequest)
+			return
+		}
+
+		// 构建签名字符串
+		params := make(map[string]string)
+		for key, values := range r.URL.Query() {
+			if key != "signature" { // 排除签名本身
+				params[key] = values[0]
+			}
+		}
+
+		// 按字母顺序排序参数
+		var keys []string
+		for k := range params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		// 构建签名字符串
+		var signParts []string
+		for _, k := range keys {
+			signParts = append(signParts, fmt.Sprintf("%s=%s", k, params[k]))
+		}
+		signString := strings.Join(signParts, "&")
+
+		// 计算预期的签名
+		h := hmac.New(sha256.New, []byte(secretKey))
+		h.Write([]byte(signString))
+		expectedSignature := hex.EncodeToString(h.Sum(nil))
+
+		// 验证签名
+		if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+			http.Error(w, "Invalid signature", http.StatusBadRequest)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+// 添加会话清理函数
+func cleanupSessions() {
+	for {
+		time.Sleep(cleanupInterval)
+
+		now := time.Now()
+		sessionsMap.Lock()
+
+		// 清理过期的会话
+		for id, session := range sessions {
+			if now.After(session.ExpiresAt) {
+				delete(sessions, id)
+			}
+		}
+
+		sessionsMap.Unlock()
+	}
 }

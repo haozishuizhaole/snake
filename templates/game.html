@@ -122,9 +122,10 @@
         <canvas id="confettiCanvas"></canvas>
     </div>
     <script>
-        // 将会话ID传递给前端
+        // 将会话ID和密钥传递给前端
         const sessionId = "{{.SessionID}}";
         const secretKey = "{{.SecretKey}}";
+        window.secretKey = secretKey;  // 将 secretKey 存储在全局变量中
     </script>
     <script src="static/js/snake.js"></script>
 </body>

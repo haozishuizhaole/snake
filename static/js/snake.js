@@ -512,10 +512,40 @@ function generateScoreHash(sessionId, score, timestamp, nonce) {
     return hash.toString(CryptoJS.enc.Hex);
 }
 
-// 更新排行榜
+// 修改通用的请求签名函数
+function generateRequestSignature(params) {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const nonce = generateNonce();
+    
+    // 添加公共参数
+    params.timestamp = timestamp;
+    params.nonce = nonce;
+    
+    // 按字母顺序排序参数
+    const keys = Object.keys(params).sort();
+    
+    // 构建签名字符串
+    const signString = keys
+        .map(key => `${key}=${params[key]}`)
+        .join('&');
+    
+    // 使用从服务器传递的 secretKey 生成签名
+    const hash = CryptoJS.HmacSHA256(signString, window.secretKey);
+    
+    return {
+        ...params,
+        signature: hash.toString(CryptoJS.enc.Hex)
+    };
+}
+
+// 修改获取排行榜函数
 async function updateScoreboard() {
     try {
-        const response = await fetch('/get-scores');
+        const params = {};
+        const signedParams = generateRequestSignature(params);
+        
+        const response = await fetch('/get-scores?' + new URLSearchParams(signedParams));
+        
         if (!response.ok) {
             throw new Error('获取排行榜失败');
         }
@@ -573,17 +603,16 @@ async function updateScoreboard() {
     }
 }
 
-// 修改回放点击处理函数
+// 修改获取回放数据函数
 async function handleReplayClick(element, playerName) {
     if (isReplaying) return;
     
     try {
-        // 禁用点击
-        element.style.opacity = '0.5';
-        element.style.pointerEvents = 'none';
+        const params = { name: playerName };
+        const signedParams = generateRequestSignature(params);
         
-        // 获取回放数据
-        const response = await fetch(`/get-replay?name=${encodeURIComponent(playerName)}`);
+        const response = await fetch(`/get-replay?` + new URLSearchParams(signedParams));
+        
         if (!response.ok) {
             throw new Error('获取回放数据失败');
         }

@@ -19,13 +19,24 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Score struct {
+// 添加一个用于提交分数的请求结构体
+type ScoreSubmission struct {
 	Name      string `json:"name"`
 	Score     int    `json:"score"`
 	SessionID string `json:"sessionId"`
 	Timestamp int64  `json:"timestamp"`
 	Nonce     string `json:"nonce"`
 	Hash      string `json:"hash"`
+	Replay    string `json:"replay"`
+}
+
+// Score 结构体保持不变，用于数据库存储
+type Score struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Score     int       `json:"score"`
+	Replay    string    `json:"replay"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 const (
@@ -51,19 +62,28 @@ func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./snake.db")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open database: %v", err)
 	}
 
-	// 只在表不存在时创建表
+	// 设置数据库连接参数
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// 创建新表（不删除旧表）
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS scores (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL UNIQUE,
 			score INTEGER NOT NULL,
+			replay TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create table: %v", err)
+	}
+
+	return nil
 }
 
 func main() {
@@ -119,15 +139,16 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var score Score
-	if err := json.NewDecoder(r.Body).Decode(&score); err != nil {
+	// 使用 ScoreSubmission 来解析请求
+	var submission ScoreSubmission
+	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// 验证会话
 	sessionsMap.RLock()
-	session, exists := sessions[score.SessionID]
+	session, exists := sessions[submission.SessionID]
 	sessionsMap.RUnlock()
 	if !exists {
 		http.Error(w, "Invalid session", http.StatusBadRequest)
@@ -140,9 +161,22 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 添加验证
+	if !validateScoreHash(submission) {
+		http.Error(w, "Invalid score submission", http.StatusBadRequest)
+		return
+	}
+
+	// 验证时间戳
+	now := time.Now().Unix()
+	if abs(now-submission.Timestamp) > maxTimeDiff {
+		http.Error(w, "Invalid timestamp", http.StatusBadRequest)
+		return
+	}
+
 	// 先查询当前玩家的历史最高分
 	var highScore int
-	err := db.QueryRow(`SELECT COALESCE(MAX(score), 0) FROM scores WHERE name = ?`, score.Name).Scan(&highScore)
+	err := db.QueryRow(`SELECT COALESCE(MAX(score), 0) FROM scores WHERE name = ?`, submission.Name).Scan(&highScore)
 	if err != nil && err != sql.ErrNoRows {
 		fmt.Printf("Database error when querying high score: %v\n", err)
 		http.Error(w, "Failed to check high score", http.StatusInternalServerError)
@@ -150,14 +184,15 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 只有当新分数高于历史最高分时才更新数据库
-	if score.Score > highScore {
+	if submission.Score > highScore {
 		_, err = db.Exec(`
-			INSERT INTO scores (name, score, created_at) 
-			VALUES (?, ?, CURRENT_TIMESTAMP)
+			INSERT INTO scores (name, score, replay, created_at) 
+			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 			ON CONFLICT(name) DO UPDATE SET 
 				score = excluded.score,
+				replay = excluded.replay,
 				created_at = CURRENT_TIMESTAMP
-		`, score.Name, score.Score)
+		`, submission.Name, submission.Score, submission.Replay)
 
 		if err != nil {
 			fmt.Printf("Database error when updating score: %v\n", err)
@@ -168,9 +203,9 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 
 	// 更新会话信息
 	sessionsMap.Lock()
-	sessions[score.SessionID] = sessionInfo{
+	sessions[submission.SessionID] = sessionInfo{
 		StartTime:  session.StartTime,
-		LastScore:  score.Score,
+		LastScore:  submission.Score,
 		LastSubmit: time.Now(),
 	}
 	sessionsMap.Unlock()
@@ -179,12 +214,30 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetScores(w http.ResponseWriter, r *http.Request) {
+	// 添加错误日志
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic in handleGetScores: %v\n", r)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	}()
+
+	// 检查数据库连接
+	if err := db.Ping(); err != nil {
+		fmt.Printf("Database connection error: %v\n", err)
+		http.Error(w, "Database connection error", http.StatusInternalServerError)
+		return
+	}
+
+	// 修改查询，包含回放数据
 	rows, err := db.Query(`
-		SELECT name, score FROM scores 
+		SELECT name, score, COALESCE(replay, '[]') as replay 
+		FROM scores 
 		ORDER BY score DESC 
 		LIMIT 10
 	`)
 	if err != nil {
+		fmt.Printf("Query error: %v\n", err)
 		http.Error(w, "Failed to get scores", http.StatusInternalServerError)
 		return
 	}
@@ -193,15 +246,28 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	scores := []Score{}
 	for rows.Next() {
 		var s Score
-		if err := rows.Scan(&s.Name, &s.Score); err != nil {
+		if err := rows.Scan(&s.Name, &s.Score, &s.Replay); err != nil {
+			fmt.Printf("Scan error: %v\n", err)
 			http.Error(w, "Failed to read scores", http.StatusInternalServerError)
 			return
 		}
+		// 设置默认值
+		s.CreatedAt = time.Now()
 		scores = append(scores, s)
 	}
 
+	if err = rows.Err(); err != nil {
+		fmt.Printf("Rows error: %v\n", err)
+		http.Error(w, "Error reading scores", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(scores)
+	if err := json.NewEncoder(w).Encode(scores); err != nil {
+		fmt.Printf("JSON encode error: %v\n", err)
+		http.Error(w, "Error encoding scores", http.StatusInternalServerError)
+		return
+	}
 }
 
 // 生成会话ID
@@ -220,8 +286,16 @@ func generateScoreHash(sessionID string, score int, timestamp int64, nonce strin
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// 验证分数哈希
-func validateScoreHash(score Score) bool {
-	expectedHash := generateScoreHash(score.SessionID, score.Score, score.Timestamp, score.Nonce)
-	return hmac.Equal([]byte(score.Hash), []byte(expectedHash))
+// 修改验证函数以使用 ScoreSubmission
+func validateScoreHash(submission ScoreSubmission) bool {
+	expectedHash := generateScoreHash(submission.SessionID, submission.Score, submission.Timestamp, submission.Nonce)
+	return hmac.Equal([]byte(submission.Hash), []byte(expectedHash))
+}
+
+// 添加辅助函数
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
 }

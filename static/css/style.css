@@ -515,10 +515,11 @@ button:hover::after {
     align-items: center;
     gap: 10px;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .ranking-item:hover {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: rgba(76, 175, 80, 0.1);
 }
 
 /* 前三名特殊样式 */
@@ -767,4 +768,76 @@ button:hover::after {
     display: flex;
     align-items: center;
     gap: 5px;
+}
+
+.replay-icon {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    margin-left: 10px;
+}
+
+.ranking-item:hover .replay-icon {
+    opacity: 1;
+}
+
+.replaying {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 10;
+    animation: fadeInOut 1s ease-in-out infinite alternate;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    max-width: 80%;  /* 限制最大宽度 */
+    white-space: nowrap;  /* 防止换行 */
+}
+
+.replaying .replay-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;  /* 限制文本区域最大宽度 */
+}
+
+.replaying strong {
+    color: #4CAF50;
+    font-weight: bold;
+    display: inline-block;
+    max-width: 120px;  /* 限制昵称最大宽度 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+}
+
+.replaying .replay-icon {
+    opacity: 1;
+    margin: 0;
+    font-size: 16px;
+    flex-shrink: 0;  /* 防止图标被压缩 */
+}
+
+.replaying .replay-score {
+    color: #FFD700;
+    font-weight: bold;
+    margin-left: 4px;
+    flex-shrink: 0;  /* 防止分数被压缩 */
+}
+
+@keyframes fadeInOut {
+    from {
+        opacity: 0.8;
+        transform: translate(-50%, -2px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
 } 

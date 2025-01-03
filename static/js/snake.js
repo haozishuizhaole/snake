@@ -21,6 +21,8 @@ let personalBestScore = 0;
 let isAIPlaying = false;
 let aiGameLoop;
 let aiStartTimeout = null;
+let gameSteps = [];
+let isReplaying = false;
 
 document.addEventListener('keydown', changeDirection);
 updateScoreboard();
@@ -240,7 +242,8 @@ function actuallyStartGame() {
 }
 
 function update() {
-    // 移动蛇
+    if (isReplaying) return;
+    
     const head = {x: snake[0].x + dx, y: snake[0].y + dy};
     
     // 检查碰撞
@@ -248,9 +251,18 @@ function update() {
         gameOver();
         return;
     }
-
+    
+    // 记录当前步骤
+    gameSteps.push({
+        snake: JSON.parse(JSON.stringify(snake)),
+        food: {...food},
+        dx: dx,
+        dy: dy,
+        score: score
+    });
+    
     snake.unshift(head);
-
+    
     // 检查是否吃到食物
     if (head.x === food.x && head.y === food.y) {
         score += 10;
@@ -259,7 +271,7 @@ function update() {
     } else {
         snake.pop();
     }
-
+    
     draw();
 }
 
@@ -531,12 +543,17 @@ async function updateScoreboard() {
                     prefix = '🥉';
                     className = 'bronze';
                 }
+
+                // 对回放数据进行编码
+                const encodedReplay = score.replay ? 
+                    encodeURIComponent(score.replay) : '[]';
                 
                 return `
-                    <div class="ranking-item ${className}">
+                    <div class="ranking-item ${className}" data-replay="${encodedReplay}">
                         <span class="rank">${prefix}</span>
                         <span class="player-name">${score.name || '未知玩家'}</span>
                         <span class="player-score">${score.score || 0}</span>
+                        <span class="replay-icon" title="点击观看回放" onclick="startReplay(this.parentElement.dataset.replay)">▶️</span>
                     </div>
                 `;
             })
@@ -562,7 +579,103 @@ async function updateScoreboard() {
     }
 }
 
-// 提交分数
+// 修改压缩函数，记录所有关键状态
+function compressGameSteps(steps) {
+    if (steps.length === 0) return '[]';
+    
+    // 记录初始状态和所有关键变化
+    const compressed = {
+        init: steps[0],  // 完整记录初始状态
+        changes: []      // 记录状态变化
+    };
+    
+    // 记录每一步的变化
+    for (let i = 1; i < steps.length; i++) {
+        const current = steps[i];
+        const prev = steps[i-1];
+        
+        // 检查是否有变化
+        if (current.dx !== prev.dx || 
+            current.dy !== prev.dy || 
+            current.food.x !== prev.food.x || 
+            current.food.y !== prev.food.y || 
+            current.score !== prev.score) {
+            
+            compressed.changes.push({
+                frame: i,
+                state: {
+                    snake: current.snake,
+                    food: current.food,
+                    dx: current.dx,
+                    dy: current.dy,
+                    score: current.score
+                }
+            });
+        }
+    }
+    
+    return JSON.stringify(compressed);
+}
+
+// 修改解压缩函数，精确还原游戏状态
+function decompressGameSteps(compressedData) {
+    const data = JSON.parse(compressedData);
+    if (!data.init) return [];
+    
+    const steps = [];
+    let currentState = JSON.parse(JSON.stringify(data.init));
+    
+    // 添加初始状态
+    steps.push(currentState);
+    
+    // 重建每一帧的状态
+    let nextChangeIndex = 0;
+    let frame = 1;
+    
+    while (nextChangeIndex < data.changes.length) {
+        const nextChange = data.changes[nextChangeIndex];
+        
+        // 在变化帧之前，继续使用当前状态移动
+        while (frame < nextChange.frame) {
+            const newState = simulateOneStep(currentState);
+            steps.push(newState);
+            currentState = newState;
+            frame++;
+        }
+        
+        // 应用变化
+        currentState = JSON.parse(JSON.stringify(nextChange.state));
+        steps.push(currentState);
+        frame++;
+        nextChangeIndex++;
+    }
+    
+    return steps;
+}
+
+// 辅助函数：模拟一步移动
+function simulateOneStep(state) {
+    const newState = JSON.parse(JSON.stringify(state));
+    
+    // 移动蛇头
+    const newHead = {
+        x: state.snake[0].x + state.dx,
+        y: state.snake[0].y + state.dy
+    };
+    
+    // 检查是否吃到食物
+    const ateFood = newHead.x === state.food.x && newHead.y === state.food.y;
+    
+    // 更新蛇的位置
+    newState.snake.unshift(newHead);
+    if (!ateFood) {
+        newState.snake.pop();
+    }
+    
+    return newState;
+}
+
+// 修改提交分数时的数据处理
 async function submitScore() {
     try {
         const timestamp = Math.floor(Date.now() / 1000);
@@ -573,7 +686,8 @@ async function submitScore() {
             sessionId: sessionId,
             timestamp: timestamp,
             nonce: nonce,
-            hash: generateScoreHash(sessionId, score, timestamp, nonce)
+            hash: generateScoreHash(sessionId, score, timestamp, nonce),
+            replay: JSON.stringify(gameSteps)  // 直接使用完整记录
         };
 
         const response = await fetch('/submit-score', {
@@ -605,6 +719,7 @@ function resetGame() {
     dx = 1;
     dy = 0;
     score = 0;
+    gameSteps = [];  // 重置游戏记录
     document.getElementById('scoreSpan').textContent = score;
     generateFood();
 }
@@ -838,4 +953,79 @@ function stopAIGame() {
         aiStartTimeout = null;
     }
     resetGame();
+}
+
+// 修改回放功能
+function startReplay(encodedReplayData) {
+    try {
+        const replayData = decodeURIComponent(encodedReplayData);
+        
+        if (!replayData || replayData === '[]') {
+            alert('暂无回放数据');
+            return;
+        }
+
+        isReplaying = true;
+        const steps = JSON.parse(replayData);
+        
+        if (!Array.isArray(steps) || steps.length === 0) {
+            alert('回放数据无效');
+            return;
+        }
+
+        let stepIndex = 0;
+        
+        // 隐藏开始界面
+        document.getElementById('startScreen').style.display = 'none';
+        
+        // 停止 AI 游戏
+        stopAIGame();
+        
+        // 添加回放提示
+        const replayIndicator = document.createElement('div');
+        replayIndicator.className = 'replaying';
+        
+        // 获取玩家昵称和分数
+        const playerItem = event.target.closest('.ranking-item');
+        const playerName = playerItem.querySelector('.player-name').textContent;
+        const playerScore = playerItem.querySelector('.player-score').textContent;
+        
+        // 构建提示文字
+        replayIndicator.innerHTML = `
+            <span class="replay-icon">🎬</span>
+            <span class="replay-text">正在回放 <strong>${playerName}</strong> 的精彩记录</span>
+            <span class="replay-score">${playerScore}分</span>
+        `;
+        
+        document.querySelector('.game-area').appendChild(replayIndicator);
+        
+        function playNextStep() {
+            if (stepIndex >= steps.length) {
+                isReplaying = false;
+                document.getElementById('startScreen').style.display = 'block';
+                replayIndicator.remove();
+                return;
+            }
+            
+            const step = steps[stepIndex];
+            snake = JSON.parse(JSON.stringify(step.snake));
+            food = {...step.food};
+            score = step.score;
+            dx = step.dx;
+            dy = step.dy;
+            
+            document.getElementById('scoreSpan').textContent = score;
+            draw();
+            
+            stepIndex++;
+            setTimeout(playNextStep, 100);  // 控制回放速度
+        }
+        
+        playNextStep();
+    } catch (error) {
+        console.error('回放错误:', error);
+        alert('回放出错，请稍后再试');
+        isReplaying = false;
+        document.getElementById('startScreen').style.display = 'block';
+    }
 } 

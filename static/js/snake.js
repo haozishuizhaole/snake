@@ -24,6 +24,7 @@ let aiStartTimeout = null;
 let gameSteps = [];
 let isReplaying = false;
 let lastDirectionChange = 0;
+let replayTimer = null;
 
 document.addEventListener('keydown', changeDirection);
 // 初始化游戏状态
@@ -633,21 +634,29 @@ function startReplay(replayData, replayButton, playerName) {
         const playerItem = replayButton.closest('.ranking-item');
         const playerScore = playerItem.querySelector('.player-score').textContent;
         
-        // 构建提示文字
+        // 修改提示文字，添加 ESC 退出提示
         replayIndicator.innerHTML = `
             <span class="replay-icon">🎬</span>
             <span class="replay-text">正在回放 <strong>${playerName}</strong> 的精彩记录</span>
             <span class="replay-score">${playerScore}分</span>
+            <span class="replay-exit-hint">[ESC 退出]</span>
         `;
         
         document.querySelector('.game-area').appendChild(replayIndicator);
         
         function playNextStep() {
-            if (stepIndex >= steps.length) {
-                isReplaying = false;
-                document.getElementById('startScreen').style.display = 'block';
-                replayIndicator.remove();
-                resetReplayButton(replayButton);
+            if (!isReplaying || stepIndex >= steps.length) {
+                if (isReplaying) {  // 正常播放完成
+                    isReplaying = false;
+                    document.getElementById('startScreen').style.display = 'block';
+                    replayIndicator.remove();
+                    resetReplayButton(replayButton);
+                }
+                // 清除定时器
+                if (replayTimer) {
+                    clearTimeout(replayTimer);
+                    replayTimer = null;
+                }
                 return;
             }
             
@@ -662,7 +671,7 @@ function startReplay(replayData, replayButton, playerName) {
             draw();
             
             stepIndex++;
-            setTimeout(playNextStep, 100);  // 控制回放速度
+            replayTimer = setTimeout(playNextStep, 100);  // 存储定时器ID
         }
         
         playNextStep();
@@ -673,6 +682,11 @@ function startReplay(replayData, replayButton, playerName) {
         isReplaying = false;
         document.getElementById('startScreen').style.display = 'block';
         resetReplayButton(replayButton);
+        // 确保清除定时器
+        if (replayTimer) {
+            clearTimeout(replayTimer);
+            replayTimer = null;
+        }
     }
 }
 
@@ -868,6 +882,12 @@ const minInterval = 2;  // 与后端保持一致
 
 // 添加键盘事件监听
 document.addEventListener('keydown', function(event) {
+    // ESC 键退出回放
+    if (event.key === 'Escape' && isReplaying) {
+        exitReplay();
+        return;
+    }
+    
     // 在昵称输入界面按回车
     if (event.key === 'Enter' && document.getElementById('welcomeScreen').style.display !== 'none') {
         submitName();
@@ -1092,4 +1112,45 @@ function stopAIGame() {
         aiStartTimeout = null;
     }
     resetGame();
+}
+
+// 添加退出回放的函数
+function exitReplay() {
+    if (!isReplaying) return;
+    
+    // 清除回放定时器
+    if (replayTimer) {
+        clearTimeout(replayTimer);
+        replayTimer = null;
+    }
+    
+    // 重置回放状态
+    isReplaying = false;
+    
+    // 移除回放提示
+    const replayIndicator = document.querySelector('.replaying');
+    if (replayIndicator) {
+        replayIndicator.remove();
+    }
+    
+    // 重置游戏状态
+    resetGame();
+    
+    // 显示开始界面
+    document.getElementById('startScreen').style.display = 'block';
+    
+    // 重置分数显示
+    document.getElementById('scoreSpan').textContent = '0';
+    
+    // 重新绘制游戏画面
+    draw();
+    
+    // 启动 AI 倒计时
+    startAICountdown();
+    
+    // 重置所有回放按钮状态
+    document.querySelectorAll('.replay-icon').forEach(icon => {
+        icon.style.opacity = '1';
+        icon.style.pointerEvents = 'auto';
+    });
 } 

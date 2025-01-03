@@ -844,4 +844,28 @@ button:hover::after {
         opacity: 1;
         transform: translate(-50%, 0);
     }
+}
+
+.replay-exit-hint {
+    color: #999;
+    font-size: 12px;
+    margin-left: 10px;
+    opacity: 0.8;
+}
+
+.replaying {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    max-width: 90%;
+    padding: 8px 20px;
+}
+
+.replaying .replay-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 } 

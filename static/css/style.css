@@ -1159,4 +1159,61 @@ button:hover::after {
     width: 50px;
     height: 2px;
     background-color: #4CAF50;
+}
+
+/* 添加排名徽章样式 */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    background-color: rgba(255, 215, 0, 0.1);
+    border-radius: 12px;
+    margin-left: 8px;
+    font-size: 12px;
+}
+
+.rank-icon {
+    font-size: 14px;
+}
+
+.rank-number {
+    color: #666;
+    font-weight: bold;
+}
+
+/* 前三名特殊样式 */
+.rank-badge[data-rank="1"] {
+    background-color: rgba(255, 215, 0, 0.15);
+}
+
+.rank-badge[data-rank="1"] .rank-number {
+    color: #FFD700;
+}
+
+.rank-badge[data-rank="2"] {
+    background-color: rgba(192, 192, 192, 0.15);
+}
+
+.rank-badge[data-rank="2"] .rank-number {
+    color: #C0C0C0;
+}
+
+.rank-badge[data-rank="3"] {
+    background-color: rgba(205, 127, 50, 0.15);
+}
+
+.rank-badge[data-rank="3"] .rank-number {
+    color: #CD7F32;
+}
+
+/* 添加排行榜底部提示样式 */
+.rankings-footer {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+    color: #999;
+    font-size: 12px;
+    text-align: center;
+    font-style: italic;
 } 

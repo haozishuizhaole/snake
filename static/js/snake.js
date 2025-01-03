@@ -396,7 +396,7 @@ async function showGameContainer() {
     startAICountdown();
 }
 
-// 添加更新个人最高分的函数
+// 修改更新个人最高分的函数
 async function updatePersonalBest() {
     try {
         const params = {
@@ -406,7 +406,7 @@ async function updatePersonalBest() {
         
         const response = await fetch('/get-scores?' + new URLSearchParams({
             ...signedParams,
-            name: playerName  // 添加昵称参数
+            name: playerName
         }));
         
         if (!response.ok) {
@@ -416,11 +416,26 @@ async function updatePersonalBest() {
         const scores = await response.json();
         const personalBestElement = document.getElementById('personalBest');
         const personalBestScoreElement = document.getElementById('personalBestScore');
+        const personalBestRankElement = document.getElementById('personalBestRank');
         
         if (scores.length > 0) {
-            const highestScore = scores[0].score;  // 已经按分数降序排序
+            // 获取所有分数以确定排名
+            const allScoresResponse = await fetch('/get-scores?' + new URLSearchParams(generateRequestSignature({})));
+            const allScores = await allScoresResponse.json();
+            
+            const playerScore = scores[0].score;
+            const rank = allScores.findIndex(s => s.score === playerScore) + 1;
+            
             personalBestElement.style.display = 'inline';
-            personalBestScoreElement.textContent = highestScore;
+            personalBestScoreElement.textContent = playerScore;
+            
+            // 更新排名显示
+            const rankNumber = personalBestRankElement.querySelector('.rank-number');
+            rankNumber.textContent = `第${rank}名`;
+            
+            // 设置排名属性用于样式
+            personalBestRankElement.setAttribute('data-rank', rank);
+            personalBestRankElement.style.display = 'inline-flex';
         } else {
             personalBestElement.style.display = 'none';
         }
@@ -817,7 +832,7 @@ function generateRequestSignature(params) {
 // 修改获取排行榜函数
 async function updateScoreboard() {
     try {
-        // 不传昵称参数，获取所有记录
+        // 不传昵称参数，获取前10名记录
         const params = {};
         const signedParams = generateRequestSignature(params);
         
@@ -833,7 +848,9 @@ async function updateScoreboard() {
             throw new Error('找不到排行榜元素');
         }
         
+        // 只显示前10名
         const rankingsHtml = scores.length > 0 ? scores
+            .slice(0, 10)  // 确保只取前10名
             .map((score, index) => {
                 let prefix = `${index + 1}.`;
                 let className = '';

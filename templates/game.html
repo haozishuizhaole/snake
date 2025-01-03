@@ -38,6 +38,10 @@
                         <span id="personalBest" style="display: none;">
                             <span class="separator">|</span>
                             历史最高: <span id="personalBestScore">0</span>
+                            <span class="rank-badge" id="personalBestRank" title="历史最高排名">
+                                <span class="rank-icon">🏅</span>
+                                <span class="rank-number"></span>
+                            </span>
                         </span>
                         <button class="change-name-btn" onclick="changeName()" title="更换昵称">
                             <span class="icon">🔄</span>
@@ -108,6 +112,10 @@
                 <div id="rankings">
                     <!-- 初始加载提示 -->
                     <div class="ranking-item">加载中...</div>
+                </div>
+                <!-- 添加底部提示 -->
+                <div class="rankings-footer">
+                    仅展示前10名玩家
                 </div>
             </div>
         </div>

@@ -414,7 +414,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 			ORDER BY score DESC
 		`, strings.Join(placeholders, ","))
 	} else {
-		// 不传昵称时获取所有记录
+		// 不传昵称时只获取前10名记录
 		query = `
 			SELECT name, score, created_at 
 			FROM scores 

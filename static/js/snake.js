@@ -1493,4 +1493,31 @@ function exitReplay() {
         icon.style.opacity = '1';
         icon.style.pointerEvents = 'auto';
     });
+}
+
+// 添加游戏说明展开/折叠功能
+function toggleInstructions() {
+    const moreContent = document.querySelector('.instructions-more');
+    const toggleBtn = document.querySelector('.toggle-instructions');
+    const toggleText = toggleBtn.querySelector('.toggle-text');
+    
+    if (moreContent.style.display === 'none') {
+        // 展开
+        moreContent.style.display = 'block';
+        moreContent.classList.remove('sliding-up');
+        moreContent.classList.add('sliding-down');
+        toggleText.textContent = '收起';
+        toggleBtn.classList.add('active');
+    } else {
+        // 折叠
+        moreContent.classList.remove('sliding-down');
+        moreContent.classList.add('sliding-up');
+        toggleText.textContent = '展开更多';
+        toggleBtn.classList.remove('active');
+        
+        // 等待动画完成后隐藏
+        setTimeout(() => {
+            moreContent.style.display = 'none';
+        }, 300);
+    }
 } 

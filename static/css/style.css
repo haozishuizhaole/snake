@@ -106,6 +106,10 @@ body {
     color: #333;
     position: relative;
     padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .scoreboard h2::after {
@@ -1061,4 +1065,98 @@ button:hover::after {
 
 .markdown-content {
     padding: 0 10px;
+}
+
+/* 游戏说明展开按钮样式 */
+.toggle-instructions {
+    width: 100%;
+    padding: 8px;
+    margin-top: 10px;
+    background-color: transparent;
+    border: 1px solid rgba(74, 175, 80, 0.3);
+    color: #4CAF50;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.toggle-instructions:hover {
+    background-color: rgba(74, 175, 80, 0.1);
+}
+
+.toggle-instructions .toggle-icon {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.toggle-instructions.active .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.instructions-more {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+/* 动画效果 */
+.instructions-more.sliding-down {
+    animation: slideDown 0.3s ease-out forwards;
+}
+
+.instructions-more.sliding-up {
+    animation: slideUp 0.3s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from {
+        max-height: 0;
+        opacity: 0;
+    }
+    to {
+        max-height: 500px;
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        max-height: 500px;
+        opacity: 1;
+    }
+    to {
+        max-height: 0;
+        opacity: 0;
+    }
+}
+
+/* 统一标题样式 */
+.game-instructions h3,
+.scoreboard h2 {
+    font-size: 20px;
+    margin-top: 0;
+    text-align: center;
+    margin-bottom: 25px;
+    color: #333;
+    position: relative;
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.game-instructions h3::after,
+.scoreboard h2::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 2px;
+    background-color: #4CAF50;
 } 

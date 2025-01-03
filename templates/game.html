@@ -86,19 +86,25 @@
                         <li>🐍 初始小蛇长度为3格，开始冒险吧！</li>
                         <li>🍊 吃到橙子可得10分，同时长度+1</li>
                         <li>💥 注意不要撞墙或咬到自己哦~</li>
-                        <li>⏰ 游戏开始前有3秒准备时间</li>
-                        <li>🔄 游戏结束后按空格键继续</li>
-                        <li>🎯 按 ESC 键可以退出回放</li>
-                        <li>🏆 破纪录会有特殊庆祝效果</li>
-                        <li>🤖 空闲时会有 AI 自动演示</li>
-                        <li>📊 支持查看历史最高分</li>
-                        <li>🎬 可以观看其他玩家的精彩回放</li>
-                        <li>🔒 游戏设有防作弊机制，请诚信游戏</li>
+                        <div class="instructions-more" style="display: none;">
+                            <li>⏰ 游戏开始前有3秒准备时间</li>
+                            <li>🔄 游戏结束后按空格键继续</li>
+                            <li>🎯 按 ESC 键可以退出回放</li>
+                            <li>🏆 破纪录会有特殊庆祝效果</li>
+                            <li>🤖 空闲时会有 AI 自动演示</li>
+                            <li>📊 支持查看历史最高分</li>
+                            <li>🎬 可以观看其他玩家的精彩回放</li>
+                            <li>🔒 游戏设有防作弊机制，请诚信游戏</li>
+                        </div>
                     </ul>
+                    <button class="toggle-instructions" onclick="toggleInstructions()">
+                        <span class="toggle-text">展开更多</span>
+                        <span class="toggle-icon">▼</span>
+                    </button>
                 </div>
             </div>
             <div class="scoreboard">
-                <h2>排行榜</h2>
+                <h2>🏆 排行榜</h2>
                 <div id="rankings">
                     <!-- 初始加载提示 -->
                     <div class="ranking-item">加载中...</div>

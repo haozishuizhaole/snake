@@ -18,6 +18,8 @@ let playerName = localStorage.getItem('playerName') || '';
 let lastGameEndTime = 0;
 let countdownTimer = null;
 let personalBestScore = 0;
+let isAIPlaying = false;
+let aiGameLoop;
 
 document.addEventListener('keydown', changeDirection);
 updateScoreboard();
@@ -151,6 +153,9 @@ function showGameContainer() {
     
     // 重置游戏状态
     resetGame();
+    
+    // 启动 AI 自动游戏
+    startAIGame();
 }
 
 // 隐藏游戏结束对话框
@@ -174,6 +179,9 @@ function startGame() {
         alert(`请等待 ${Math.ceil(minInterval - timeSinceLastGame)} 秒后再开始新游戏`);
         return;
     }
+    
+    // 停止 AI 游戏
+    stopAIGame();
     
     document.getElementById('startScreen').style.display = 'none';
     startCountdown();
@@ -623,4 +631,96 @@ function toggleVersionHistory() {
     } else {
         content.style.display = 'block';
     }
+}
+
+// 添加 AI 自动游戏功能
+function startAIGame() {
+    isAIPlaying = true;
+    resetGame();
+    aiGameLoop = setInterval(updateAIGame, 100);
+}
+
+// AI 游戏更新函数
+function updateAIGame() {
+    if (!isAIPlaying) return;
+    
+    // AI 决策：计算下一步移动方向
+    const head = snake[0];
+    const foodDir = {
+        x: food.x - head.x,
+        y: food.y - head.y
+    };
+    
+    // 优先选择安全的移动方向
+    const possibleMoves = getPossibleMoves();
+    if (possibleMoves.length === 0) {
+        stopAIGame();
+        return;
+    }
+    
+    // 选择最佳移动方向
+    const bestMove = chooseBestMove(possibleMoves, foodDir);
+    dx = bestMove.x;
+    dy = bestMove.y;
+    
+    // 更新游戏状态
+    const newHead = {x: head.x + dx, y: head.y + dy};
+    snake.unshift(newHead);
+    
+    // 检查是否吃到食物
+    if (newHead.x === food.x && newHead.y === food.y) {
+        generateFood();
+    } else {
+        snake.pop();
+    }
+    
+    draw();
+}
+
+// 获取可能的移动方向
+function getPossibleMoves() {
+    const head = snake[0];
+    const moves = [
+        {x: 1, y: 0},
+        {x: -1, y: 0},
+        {x: 0, y: 1},
+        {x: 0, y: -1}
+    ];
+    
+    return moves.filter(move => {
+        const newX = head.x + move.x;
+        const newY = head.y + move.y;
+        
+        // 检查是否会撞墙
+        if (newX < 0 || newX >= tileCount || newY < 0 || newY >= tileCount) {
+            return false;
+        }
+        
+        // 检查是否会撞到自己
+        return !snake.some(segment => segment.x === newX && segment.y === newY);
+    });
+}
+
+// 选择最佳移动方向
+function chooseBestMove(possibleMoves, foodDir) {
+    // 计算每个移动方向到食物的距离
+    const distances = possibleMoves.map(move => {
+        const dx = Math.abs(foodDir.x - move.x);
+        const dy = Math.abs(foodDir.y - move.y);
+        return {move, distance: dx + dy};
+    });
+    
+    // 选择距离最短的移动方向
+    distances.sort((a, b) => a.distance - b.distance);
+    return distances[0].move;
+}
+
+// 停止 AI 游戏
+function stopAIGame() {
+    if (aiGameLoop) {
+        clearInterval(aiGameLoop);
+        aiGameLoop = null;
+    }
+    isAIPlaying = false;
+    resetGame();
 } 

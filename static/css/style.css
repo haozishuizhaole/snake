@@ -711,4 +711,60 @@ button:hover::after {
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+.ranking-item.error {
+    color: #ff4444;
+    text-align: center;
+    padding: 10px;
+    background-color: rgba(255, 68, 68, 0.1);
+    border-radius: 4px;
+}
+
+.change-name-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 5px;
+    margin-left: 5px;
+    opacity: 0.7;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.change-name-btn .icon {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.change-name-btn:hover .icon {
+    transform: rotate(180deg);
+}
+
+.change-name-btn::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.change-name-btn:hover::after {
+    opacity: 1;
+}
+
+.current-player {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 } 

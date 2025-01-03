@@ -3,6 +3,7 @@
 <head>
     <title>贪吃蛇游戏</title>
     <link rel="stylesheet" href="static/css/style.css">
+    <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
@@ -31,7 +32,12 @@
             <div class="game-area">
                 <div class="game-overlay">
                     <div class="score">分数: <span id="scoreSpan">0</span></div>
-                    <div class="current-player">玩家: <span id="currentPlayerName"></span></div>
+                    <div class="current-player">
+                        玩家: <span id="currentPlayerName"></span>
+                        <button class="change-name-btn" onclick="changeName()" title="更换昵称">
+                            <span class="icon">🔄</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="start-screen" id="startScreen">
                     <button onclick="startGame()" title="按空格键开始">开始新游戏 [空格]</button>
@@ -94,7 +100,10 @@
             </div>
             <div class="scoreboard">
                 <h2>排行榜</h2>
-                <div id="rankings"></div>
+                <div id="rankings">
+                    <!-- 初始加载提示 -->
+                    <div class="ranking-item">加载中...</div>
+                </div>
             </div>
         </div>
     </div>

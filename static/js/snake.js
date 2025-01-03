@@ -14,7 +14,7 @@ let dy = 0;
 let score = 0;
 let gameLoop;
 let gameStarted = false;
-let playerName = '';
+let playerName = localStorage.getItem('playerName') || '';
 let lastGameEndTime = 0;
 let countdownTimer = null;
 let personalBestScore = 0;
@@ -41,20 +41,116 @@ function getPersonalBestScore() {
 
 // 提交玩家名字
 function submitName() {
-    const nameInput = document.getElementById('playerName').value.trim();
-    if (!nameInput) {
+    const nameInput = document.getElementById('playerName');
+    const name = nameInput.value.trim();
+    if (!name) {
         alert('请输入昵称！');
         return;
     }
     
-    playerName = nameInput;
-    // 获取该玩家的历史最高分
-    getPersonalBestScore();
-    document.getElementById('welcomeScreen').style.display = 'none';
-    document.getElementById('gameContainer').style.display = 'block';
+    setPlayerName(name);
+    showGameContainer();
+}
+
+// 添加设置玩家名称的函数
+function setPlayerName(name) {
+    playerName = name;
+    localStorage.setItem('playerName', name);
+    
+    // 更新显示
+    const currentPlayerName = document.getElementById('currentPlayerName');
+    if (currentPlayerName) {
+        currentPlayerName.textContent = name;
+    }
+}
+
+// 修改更换昵称的函数
+function changeName() {
+    // 清除本地存储的昵称
+    localStorage.removeItem('playerName');
+    playerName = '';
+    
+    // 重置游戏状态
+    if (gameLoop) {
+        clearInterval(gameLoop);
+        gameLoop = null;
+    }
+    if (countdownTimer) {
+        clearTimeout(countdownTimer);
+        countdownTimer = null;
+    }
+    gameStarted = false;
+    
+    // 重置欢迎界面
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    welcomeScreen.style.cssText = `
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #f0f0f0;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    `;
+    
+    // 隐藏其他界面
+    document.getElementById('gameContainer').style.display = 'none';
+    document.getElementById('gameOver').style.display = 'none';
+    
+    // 清空昵称输入框
+    const nameInput = document.getElementById('playerName');
+    if (nameInput) {
+        nameInput.value = '';
+        nameInput.focus(); // 自动聚焦到输入框
+    }
+    
+    // 重置游戏
+    resetGame();
+}
+
+// 修改页面加载逻辑
+document.addEventListener('DOMContentLoaded', () => {
+    // 如果已有存储的昵称，直接进入游戏界面
+    if (playerName) {
+        showGameContainer();
+    } else {
+        // 显示欢迎界面
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        welcomeScreen.style.cssText = `
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0f0f0;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        `;
+    }
+    
+    // 更新排行榜
+    updateScoreboard();
+});
+
+// 修改显示游戏容器的函数
+function showGameContainer() {
+    // 隐藏欢迎界面
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    welcomeScreen.style.display = 'none';
+    
+    // 显示游戏界面
+    const gameContainer = document.getElementById('gameContainer');
+    gameContainer.style.display = 'block';
     document.getElementById('startScreen').style.display = 'block';
-    document.getElementById('playerNameDisplay').textContent = playerName;
     document.getElementById('currentPlayerName').textContent = playerName;
+    
+    // 重置游戏状态
+    resetGame();
 }
 
 // 隐藏游戏结束对话框
@@ -65,6 +161,10 @@ function hideGameOver() {
 }
 
 function startGame() {
+    if (!playerName) {
+        alert('请先输入昵称！');
+        return;
+    }
     if (gameStarted) return;
     
     // 检查是否可以开始新游戏
@@ -75,7 +175,6 @@ function startGame() {
         return;
     }
     
-    // 开始倒计时
     document.getElementById('startScreen').style.display = 'none';
     startCountdown();
 }
@@ -362,38 +461,106 @@ function generateScoreHash(sessionId, score, timestamp, nonce) {
     return hash.toString(CryptoJS.enc.Hex);
 }
 
-function updateScoreboard() {
-    fetch('/get-scores')
-        .then(response => response.json())
-        .then(scores => {
-            const rankings = document.getElementById('rankings');
-            rankings.innerHTML = scores
-                .map((score, index) => {
-                    let prefix = `${index + 1}.`;
-                    let className = '';
-                    
-                    // 为前三名添加奖杯图标和特殊样式
-                    if (index === 0) {
-                        prefix = '🏆';
-                        className = 'gold';
-                    } else if (index === 1) {
-                        prefix = '🥈';
-                        className = 'silver';
-                    } else if (index === 2) {
-                        prefix = '🥉';
-                        className = 'bronze';
-                    }
-                    
-                    return `
-                        <div class="ranking-item ${className}">
-                            <span class="rank">${prefix}</span>
-                            <span class="player-name">${score.name}</span>
-                            <span class="player-score">${score.score}</span>
-                        </div>
-                    `;
-                })
-                .join('');
+// 更新排行榜
+async function updateScoreboard() {
+    try {
+        const response = await fetch('/get-scores');
+        if (!response.ok) {
+            throw new Error('获取排行榜失败');
+        }
+        
+        const scores = await response.json();
+        if (!Array.isArray(scores)) {
+            console.error('Invalid scores data:', scores);
+            return;
+        }
+
+        const rankings = document.getElementById('rankings');
+        if (!rankings) {
+            console.error('Rankings element not found');
+            return;
+        }
+
+        // 生成排行榜 HTML
+        const rankingsHtml = scores.length > 0 ? scores
+            .map((score, index) => {
+                let prefix = `${index + 1}.`;
+                let className = '';
+                
+                // 为前三名添加奖杯图标和特殊样式
+                if (index === 0) {
+                    prefix = '🏆';
+                    className = 'gold';
+                } else if (index === 1) {
+                    prefix = '🥈';
+                    className = 'silver';
+                } else if (index === 2) {
+                    prefix = '🥉';
+                    className = 'bronze';
+                }
+                
+                return `
+                    <div class="ranking-item ${className}">
+                        <span class="rank">${prefix}</span>
+                        <span class="player-name">${score.name || '未知玩家'}</span>
+                        <span class="player-score">${score.score || 0}</span>
+                    </div>
+                `;
+            })
+            .join('') : '<div class="ranking-item">暂无记录</div>';
+
+        rankings.innerHTML = rankingsHtml;
+
+        // 更新最高分
+        if (scores.length > 0) {
+            const highScore = scores[0];
+            const highScoreElement = document.getElementById('highScore');
+            if (highScoreElement) {
+                highScoreElement.textContent = `最高分: ${highScore.score || 0}`;
+            }
+        }
+    } catch (error) {
+        console.error('更新排行榜出错:', error);
+        // 显示错误信息给用户
+        const rankings = document.getElementById('rankings');
+        if (rankings) {
+            rankings.innerHTML = '<div class="ranking-item error">获取排行榜失败，请稍后再试</div>';
+        }
+    }
+}
+
+// 提交分数
+async function submitScore() {
+    try {
+        const timestamp = Math.floor(Date.now() / 1000);
+        const nonce = generateNonce();
+        const scoreData = {
+            name: playerName,
+            score: score,
+            sessionId: sessionId,
+            timestamp: timestamp,
+            nonce: nonce,
+            hash: generateScoreHash(sessionId, score, timestamp, nonce)
+        };
+
+        const response = await fetch('/submit-score', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(scoreData)
         });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+
+        await updateScoreboard();
+    } catch (error) {
+        console.error('提交分数失败:', error);
+        alert('提交分数失败: ' + error.message);
+    }
 }
 
 function resetGame() {
@@ -407,38 +574,6 @@ function resetGame() {
     score = 0;
     document.getElementById('scoreSpan').textContent = score;
     generateFood();
-}
-
-function submitScore() {
-    const timestamp = Math.floor(Date.now() / 1000);
-    const nonce = generateNonce();
-    const scoreData = {
-        name: playerName,
-        score: score,
-        sessionId: sessionId,
-        timestamp: timestamp,
-        nonce: nonce,
-        hash: generateScoreHash(sessionId, score, timestamp, nonce)
-    };
-
-    fetch('/submit-score', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(scoreData)
-    }).then(response => {
-        if (!response.ok) {
-            return response.text().then(text => {
-                throw new Error(text);
-            });
-        }
-        return response;
-    }).then(() => {
-        updateScoreboard();
-    }).catch(error => {
-        alert('提交分数失败: ' + error.message);
-    });
 }
 
 // 添加常量

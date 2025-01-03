@@ -594,14 +594,27 @@ function draw() {
         ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
     });
 
-    // 画食物
-    ctx.font = `${gridSize}px Arial`;
+    // 优化食物的绘制
+    const fontSize = Math.floor(gridSize * 0.8); // 调整食物大小为格子的 80%
+    ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    
+    // 添加食物发光效果
+    ctx.shadowColor = 'rgba(255, 165, 0, 0.5)';  // 橙色阴影
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // 绘制食物
     ctx.fillText('🍊', 
         food.x * gridSize + gridSize/2,
         food.y * gridSize + gridSize/2
     );
+    
+    // 重置阴影效果
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
 }
 
 function changeDirection(event) {

@@ -1,0 +1,212 @@
+<!--
+   Copyright (c) 2025 TootsCharlie
+   Snake is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
+               http://license.coscl.org.cn/MulanPSL2
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>贪吃蛇游戏</title>
+    <link rel="stylesheet" href="static/css/style.css">
+    <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+<canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999;"></canvas>
+<!-- 初始昵称输入界面 -->
+<div class="welcome-screen" id="welcomeScreen">
+    <div class="welcome-content">
+        <div class="welcome-header">
+            <h1>🐍 蛇年大吉 🐍</h1>
+            <!-- <p class="welcome-subtitle">祝你工作顺遂 💼 薪资上涨 💰</p> -->
+            <p class="welcome-extra">像蛇一样灵活，像龙一样腾飞 🚀</p>
+            <div class="ai-signature">
+                <span class="ai-badge">🤖 AI Generated</span>
+            </div>
+        </div>
+        <div class="name-input">
+            <input type="text" id="playerName" placeholder="请输入你的昵称">
+            <button onclick="submitName()" title="按回车键确认">进入游戏 ⏎</button>
+        </div>
+    </div>
+</div>
+
+<!-- 在 container div 之前添加标题区域 -->
+<div class="game-title-area">
+    <h1>🐍 蛇年大吉 🐍</h1>
+    <!-- <p class="game-subtitle">祝你工作顺遂 💼 薪资上涨 💰</p> -->
+    <p class="game-extra">像蛇一样灵活，像龙一样腾飞 🚀</p>
+    <div class="ai-signature">
+        <span class="ai-badge">🤖 AI Generated</span>
+    </div>
+</div>
+
+<!-- 游戏主界面（初始隐藏） -->
+<div class="container" id="gameContainer" style="display: none;">
+    <div class="game-container">
+        <!-- 游戏区域 -->
+        <div class="game-area">
+            <div class="game-overlay">
+                <div class="score">分数: <span id="scoreSpan">0</span></div>
+                <div class="current-player">
+                        <span class="stat-badge" title="当前玩家">
+                            <span class="stat-icon">👤</span>
+                            <span id="currentPlayerName"></span>
+                        </span>
+                    <span id="personalBest" style="display: none;">
+                            <span class="separator">|</span>
+                            <span class="stat-badge" title="历史最高分">
+                                <span class="stat-icon">👑</span>
+                                <span id="personalBestScore">0</span>
+                            </span>
+                            <span class="rank-badge" id="personalBestRank" title="历史最高排名">
+                                <span class="stat-icon">🏅</span>
+                                <span class="rank-number"></span>
+                            </span>
+                            <span class="separator">|</span>
+                            <span class="stat-badge" title="总得分">
+                                <span class="stat-icon">🍊</span>
+                                <span id="personalTotalScore">0</span>
+                            </span>
+                            <span class="separator">|</span>
+                            <span class="stat-badge" title="游戏次数">
+                                <span class="stat-icon">🎮</span>
+                                <span id="personalPlayCount">0</span>
+                            </span>
+                        </span>
+                    <button class="change-name-btn" onclick="changeName()" title="更换昵称">
+                        <span class="icon">🔄</span>
+                    </button>
+                </div>
+            </div>
+            <div class="start-screen" id="startScreen">
+                <button onclick="startGame()" title="按空格键开始">开始新游戏 [空格]</button>
+            </div>
+            <div class="countdown" id="countdown"></div>
+            <canvas id="gameCanvas" width="600" height="600"></canvas>
+        </div>
+        <div class="version-info">
+            <div class="version-header" onclick="toggleVersionHistory()">
+                <h3>
+                    <span class="version-title">📝 更新记录</span>
+                    {{if len .Versions}}
+                    <span class="current-version">{{(index .Versions 0).Version}}</span>
+                    {{else}}
+                    <span class="current-version">v1.0</span>
+                    {{end}}
+                </h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="version-content" style="display: none;">
+                {{range .Versions}}
+                <div class="version-section">
+                    <div class="version-header-small">
+                        <span class="version-number">{{.Version}}</span>
+                        <span class="version-date">{{.Date}}</span>
+                    </div>
+                    <div class="version-content markdown-content">
+                        {{markdown .Content}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    <div class="right-sidebar">
+        <div class="game-instructions">
+            <h3>🎮 游戏玩法</h3>
+            <div class="instructions-content">
+                <ul>
+                    <li>🎯 使用方向键（↑↓←→）控制小蛇移动</li>
+                    <li>🐍 初始小蛇长度为3格，开始冒险吧！</li>
+                    <li>🍊 吃到橙子可得10分，同时长度+1</li>
+                    <li>💥 注意不要撞墙或咬到自己哦~</li>
+                    <div class="instructions-more" style="display: none;">
+                        <li>⏰ 游戏开始前有3秒准备时间</li>
+                        <li>🔄 游戏结束后按空格键继续</li>
+                        <li>🎯 按 ESC 键可以退出回放</li>
+                        <li>🏆 破纪录会有特殊庆祝效果</li>
+                        <li>🤖 空闲时会有 AI 自动演示</li>
+                        <li>📊 支持查看历史最高分</li>
+                        <li>🎬 可以观看其他玩家的精彩回放</li>
+                        <li>🔒 游戏设有防作弊机制，请诚信游戏</li>
+                    </div>
+                </ul>
+                <button class="toggle-instructions" onclick="toggleInstructions()">
+                    <span class="toggle-text">展开更多</span>
+                    <span class="toggle-icon">▼</span>
+                </button>
+            </div>
+        </div>
+        <div class="game-stats">
+            <h2>🎲 游戏数据</h2>
+            <div class="stats-content">
+                <div class="stat-item" data-tooltip="总玩家数">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value" id="totalPlayers">-</div>
+                </div>
+                <div class="stat-item" data-tooltip="总游戏次数">
+                    <div class="stat-icon">🎮</div>
+                    <div class="stat-value" id="totalGames">-</div>
+                </div>
+                <div class="stat-item" data-tooltip="总分数">
+                    <div class="stat-icon">🍊</div>
+                    <div class="stat-value" id="totalScore">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="scoreboard">
+            <h2>🏆 排行榜</h2>
+            <div id="rankings">
+                <!-- 初始加载提示 -->
+                <div class="ranking-item">加载中...</div>
+            </div>
+            <!-- 添加底部提示 -->
+            <div class="rankings-footer">
+                仅展示前10名玩家
+            </div>
+        </div>
+    </div>
+</div>
+<div id="gameOver" class="modal">
+    <div class="modal-content">
+        <!-- 添加加载状态 -->
+        <div id="scoreLoading" class="score-loading">
+            <h2>正在结算，请勿离开</h2>
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- 结算结果（初始隐藏） -->
+        <div id="scoreResult" style="display: none;">
+            <h2>游戏结束</h2>
+            <div id="newRecord" style="display: none;">
+                <h3 style="color: #FFD700;">🎉 新纪录！ 🎉</h3>
+                <p style="color: #4CAF50;">恭喜你打破了个人最高分！</p>
+            </div>
+            <!-- 添加常规结算信息 -->
+            <div id="normalScore" style="display: none;">
+                <div class="encouragement">
+                    <h3>💪 你已经很棒啦！</h3>
+                    <p class="encouragement-text"></p>
+                </div>
+            </div>
+            <p>你的分数: <span id="finalScore">0</span></p>
+            <p>玩家: <span id="playerNameDisplay"></span></p>
+            <button onclick="hideGameOver()" title="按空格键继续">继续游戏 [空格]</button>
+        </div>
+    </div>
+</div>
+<script>
+    // 将会话ID和密钥传递给前端
+    const sessionId = "{{.SessionID}}";
+    const secretKey = "{{.SecretKey}}";
+    window.secretKey = secretKey;  // 将 secretKey 存储在全局变量中
+</script>
+<script src="static/js/snake.js"></script>
+</body>
+</html> 

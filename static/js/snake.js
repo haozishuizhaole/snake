@@ -687,7 +687,7 @@ async function submitScore() {
             timestamp: timestamp,
             nonce: nonce,
             hash: generateScoreHash(sessionId, score, timestamp, nonce),
-            replay: JSON.stringify(gameSteps)  // 直接使用完整记录
+            replay: JSON.stringify(gameSteps)  // 直接提交完整记录
         };
 
         const response = await fetch('/submit-score', {

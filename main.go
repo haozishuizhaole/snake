@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"sync"
@@ -183,6 +186,14 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 压缩回放数据
+	compressedReplay, err := compressReplay(submission.Replay)
+	if err != nil {
+		fmt.Printf("Failed to compress replay: %v\n", err)
+		http.Error(w, "Failed to process replay data", http.StatusInternalServerError)
+		return
+	}
+
 	// 只有当新分数高于历史最高分时才更新数据库
 	if submission.Score > highScore {
 		_, err = db.Exec(`
@@ -192,7 +203,7 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 				score = excluded.score,
 				replay = excluded.replay,
 				created_at = CURRENT_TIMESTAMP
-		`, submission.Name, submission.Score, submission.Replay)
+		`, submission.Name, submission.Score, compressedReplay)
 
 		if err != nil {
 			fmt.Printf("Database error when updating score: %v\n", err)
@@ -229,9 +240,9 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 修改查询，包含回放数据
+	// 修改查询语句，确保包含所有需要的列
 	rows, err := db.Query(`
-		SELECT name, score, COALESCE(replay, '[]') as replay 
+		SELECT name, score, replay, created_at 
 		FROM scores 
 		ORDER BY score DESC 
 		LIMIT 10
@@ -246,13 +257,26 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	scores := []Score{}
 	for rows.Next() {
 		var s Score
-		if err := rows.Scan(&s.Name, &s.Score, &s.Replay); err != nil {
+		var compressedReplay string
+		if err := rows.Scan(&s.Name, &s.Score, &compressedReplay, &s.CreatedAt); err != nil {
 			fmt.Printf("Scan error: %v\n", err)
 			http.Error(w, "Failed to read scores", http.StatusInternalServerError)
 			return
 		}
-		// 设置默认值
-		s.CreatedAt = time.Now()
+
+		// 解压缩回放数据
+		if compressedReplay != "" {
+			decompressedReplay, err := decompressReplay(compressedReplay)
+			if err != nil {
+				fmt.Printf("Failed to decompress replay for %s: %v\n", s.Name, err)
+				s.Replay = "[]" // 如果解压失败，返回空数组
+			} else {
+				s.Replay = decompressedReplay
+			}
+		} else {
+			s.Replay = "[]"
+		}
+
 		scores = append(scores, s)
 	}
 
@@ -298,4 +322,42 @@ func abs(n int64) int64 {
 		return -n
 	}
 	return n
+}
+
+// 添加压缩函数
+func compressReplay(data string) (string, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+
+	if _, err := gz.Write([]byte(data)); err != nil {
+		return "", err
+	}
+
+	if err := gz.Close(); err != nil {
+		return "", err
+	}
+
+	// 使用 base64 编码压缩后的数据，使其可以安全存储在数据库中
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
+
+// 添加解压缩函数
+func decompressReplay(compressed string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(compressed)
+	if err != nil {
+		return "", err
+	}
+
+	gz, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	defer gz.Close()
+
+	decompressed, err := ioutil.ReadAll(gz)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decompressed), nil
 }

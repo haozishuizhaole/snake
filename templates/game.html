@@ -44,17 +44,29 @@
                 <div class="game-overlay">
                     <div class="score">分数: <span id="scoreSpan">0</span></div>
                     <div class="current-player">
-                        玩家: <span id="currentPlayerName"></span>
+                        <span class="stat-badge" title="当前玩家">
+                            <span class="stat-icon">👤</span>
+                            <span id="currentPlayerName"></span>
+                        </span>
                         <span id="personalBest" style="display: none;">
                             <span class="separator">|</span>
-                            历史最高: <span id="personalBestScore">0</span>
+                            <span class="stat-badge" title="历史最高分">
+                                <span class="stat-icon">👑</span>
+                                <span id="personalBestScore">0</span>
+                            </span>
                             <span class="rank-badge" id="personalBestRank" title="历史最高排名">
-                                <span class="rank-icon">🏅</span>
+                                <span class="stat-icon">🏅</span>
                                 <span class="rank-number"></span>
                             </span>
-                            <span class="play-count">
-                                <span class="separator">|</span>
-                                游戏次数: <span id="personalPlayCount">0</span>
+                            <span class="separator">|</span>
+                            <span class="stat-badge" title="总得分">
+                                <span class="stat-icon">🍊</span>
+                                <span id="personalTotalScore">0</span>
+                            </span>
+                            <span class="separator">|</span>
+                            <span class="stat-badge" title="游戏次数">
+                                <span class="stat-icon">🎮</span>
+                                <span id="personalPlayCount">0</span>
                             </span>
                         </span>
                         <button class="change-name-btn" onclick="changeName()" title="更换昵称">

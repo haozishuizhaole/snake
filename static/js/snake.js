@@ -423,10 +423,11 @@ async function updatePersonalBest() {
             personalBestElement.style.display = 'inline';
             personalBestScoreElement.textContent = playerData.score;
             
-            // 更新游戏次数
+            // 更新游戏次数和总分
             document.getElementById('personalPlayCount').textContent = playerData.playCount;
+            document.getElementById('personalTotalScore').textContent = playerData.totalScore;
             
-            // 获取所有分数以确定排名
+            // 获取排名
             const allScoresResponse = await fetch('/get-scores?' + new URLSearchParams(generateRequestSignature({})));
             const allScores = await allScoresResponse.json();
             
@@ -435,7 +436,7 @@ async function updatePersonalBest() {
             
             // 更新排名显示
             const rankNumber = personalBestRankElement.querySelector('.rank-number');
-            rankNumber.textContent = `第${rank}名`;
+            rankNumber.textContent = `${rank}`;
             
             // 设置排名属性用于样式
             personalBestRankElement.setAttribute('data-rank', rank);
@@ -785,8 +786,95 @@ function gameOver() {
     scoreLoading.style.display = 'block';
     scoreResult.style.display = 'none';
 
-    // 提交分数并处理结果
-    submitScore();
+    // 生成游戏回放数据
+    const replayData = JSON.stringify(gameSteps);
+
+    // 提交分数
+    const timestamp = Math.floor(Date.now() / 1000);
+    const nonce = generateNonce();
+    const scoreData = {
+        name: playerName,
+        score: score,
+        sessionId: sessionId,
+        timestamp: timestamp,
+        nonce: nonce,
+        hash: generateScoreHash(sessionId, score, timestamp, nonce),
+        replay: replayData
+    };
+
+    // 直接调用 fetch 提交分数
+    fetch('/submit-score', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(scoreData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('提交分数失败');
+        }
+        return response.json();
+    })
+    .then(result => {
+        // 隐藏加载状态，显示结算结果
+        scoreLoading.style.display = 'none';
+        scoreResult.style.display = 'block';
+        
+        // 更新分数和玩家名称显示
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('playerNameDisplay').textContent = playerName;
+        
+        // 根据是否破纪录显示不同内容
+        if (result.isNewRecord) {
+            startConfetti();
+            document.getElementById('newRecord').style.display = 'block';
+            document.getElementById('normalScore').style.display = 'none';
+            
+            // 随机选择一条庆祝语
+            const celebration = celebrations[Math.floor(Math.random() * celebrations.length)];
+            const recordText = document.querySelector('#newRecord p');
+            recordText.innerHTML = `
+                <div class="celebration-text">
+                    <span class="celebration-emoji">${celebration.emoji}</span>
+                    ${celebration.text}
+                </div>
+            `;
+        } else {
+            document.getElementById('newRecord').style.display = 'none';
+            document.getElementById('normalScore').style.display = 'block';
+            
+            // 随机选择一条鼓励语
+            const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+            const encouragementText = document.querySelector('.encouragement-text');
+            encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
+        }
+
+        // 更新排行榜和个人最高分
+        Promise.all([
+            updateScoreboard(),
+            updatePersonalBest(),
+            updateGameStats()
+        ]).catch(console.error);
+    })
+    .catch(error => {
+        console.error('提交分数失败:', error);
+        // 显示错误信息
+        scoreLoading.style.display = 'none';
+        scoreResult.style.display = 'block';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('playerNameDisplay').textContent = playerName;
+        
+        // 显示鼓励语
+        document.getElementById('newRecord').style.display = 'none';
+        document.getElementById('normalScore').style.display = 'block';
+        const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+        const encouragementText = document.querySelector('.encouragement-text');
+        encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
+    })
+    .finally(() => {
+        antiCheat.cleanup();
+    });
 }
 
 function generateNonce(length = 16) {
@@ -1133,19 +1221,24 @@ function simulateOneStep(state) {
 
 // 修改提交分数函数
 async function submitScore() {
-    // 进行最终的反外挂检查
-    if (!antiCheat.validateScore(score, score/10)) {
-        alert('检测到异常分数，无法提交');
-        return;
-    }
-
-    if (antiCheat.getViolations().length > 0) {
-        alert('检测到游戏过程中存在异常，无法提交分数');
-        console.error('Anti-cheat violations:', antiCheat.getViolations());
-        return;
-    }
-
     try {
+        console.log('开始提交分数...'); // 添加日志
+
+        // 进行最终的反外挂检查
+        if (!antiCheat.validateScore(score, score/10)) {
+            alert('检测到异常分数，无法提交');
+            hideGameOver();  // 添加这行，在检测到作弊时关闭加载界面
+            return;
+        }
+
+        if (antiCheat.getViolations().length > 0) {
+            alert('检测到游戏过程中存在异常，无法提交分数');
+            console.error('Anti-cheat violations:', antiCheat.getViolations());
+            hideGameOver();  // 添加这行，在检测到作弊时关闭加载界面
+            return;
+        }
+
+        console.log('生成提交数据...'); // 添加日志
         const timestamp = Math.floor(Date.now() / 1000);
         const nonce = generateNonce();
         const scoreData = {
@@ -1158,6 +1251,7 @@ async function submitScore() {
             replay: JSON.stringify(gameSteps)
         };
 
+        console.log('发送请求...', scoreData); // 添加日志
         const response = await fetch('/submit-score', {
             method: 'POST',
             headers: {
@@ -1170,7 +1264,7 @@ async function submitScore() {
             throw new Error(await response.text());
         }
 
-        // 处理响应
+        console.log('处理响应...'); // 添加日志
         const result = await response.json();
         
         // 隐藏加载状态，显示结算结果
@@ -1216,7 +1310,7 @@ async function submitScore() {
         await updateGameStats();
         
     } catch (error) {
-        console.error('提交分数失败:', error);
+        console.error('提交分数失败:', error); // 添加错误日志
         alert('提交分数失败: ' + error.message);
         
         // 出错时也显示鼓励语
@@ -1225,6 +1319,12 @@ async function submitScore() {
         const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
         const encouragementText = document.querySelector('.encouragement-text');
         encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
+        
+        // 显示结果界面，即使出错
+        document.getElementById('scoreLoading').style.display = 'none';
+        document.getElementById('scoreResult').style.display = 'block';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('playerNameDisplay').textContent = playerName;
     } finally {
         antiCheat.cleanup();
     }

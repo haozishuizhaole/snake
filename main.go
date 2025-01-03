@@ -40,11 +40,12 @@ type ScoreSubmission struct {
 
 // Score 结构体保持不变，用于数据库存储
 type Score struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	Score     int       `json:"score"`
-	PlayCount int       `json:"playCount"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         int       `json:"id"`
+	Name       string    `json:"name"`
+	Score      int       `json:"score"`
+	TotalScore int       `json:"totalScore"`
+	PlayCount  int       `json:"playCount"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 // 添加提交分数的响应结构体
@@ -206,6 +207,16 @@ var migrations = []Migration{
 			UPDATE scores SET play_count = 1 WHERE play_count IS NULL;
 		`,
 	},
+	{
+		Version:     3,
+		Description: "Add total_score column",
+		SQL: `
+			ALTER TABLE scores ADD COLUMN total_score INTEGER DEFAULT 0;
+			
+			-- 初始化总分为当前最高分
+			UPDATE scores SET total_score = score;
+		`,
+	},
 }
 
 // 修改数据库初始化函数
@@ -301,16 +312,16 @@ type GameStats struct {
 	TotalScore   int `json:"totalScore"`
 }
 
-// 添加获取统计数据的处理函数
+// 修改获取统计数据的处理函数
 func handleGetStats(w http.ResponseWriter, r *http.Request) {
 	var stats GameStats
 
-	// 获取统计数据
+	// 修改 SQL 查询，使用 total_score 字段而不是 score 字段
 	err := db.QueryRow(`
 		SELECT 
 			COUNT(DISTINCT name) as total_players,
 			SUM(play_count) as total_games,
-			SUM(score) as total_score
+			SUM(total_score) as total_score
 		FROM scores
 	`).Scan(&stats.TotalPlayers, &stats.TotalGames, &stats.TotalScore)
 
@@ -484,14 +495,15 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 
 	// 更新数据库
 	_, err = tx.Exec(`
-		INSERT INTO scores (name, score, replay, play_count, created_at) 
-		VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+		INSERT INTO scores (name, score, total_score, replay, play_count, created_at) 
+		VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
 			ON CONFLICT(name) DO UPDATE SET 
 				score = CASE WHEN excluded.score > score THEN excluded.score ELSE score END,
+				total_score = total_score + excluded.score,
 				replay = CASE WHEN excluded.score > score THEN excluded.replay ELSE replay END,
 				play_count = play_count + 1,
-				created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
-	`, submission.Name, submission.Score, compressedReplay)
+					created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
+	`, submission.Name, submission.Score, submission.Score, compressedReplay)
 
 	if err != nil {
 		fmt.Printf("Database error when updating score: %v\n", err)
@@ -529,7 +541,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 			args = append(args, names[i])
 		}
 		query = fmt.Sprintf(`
-			SELECT name, score, play_count, created_at 
+			SELECT name, score, total_score, play_count, created_at 
 			FROM scores 
 			WHERE name IN (%s)
 			ORDER BY score DESC
@@ -537,7 +549,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 不传昵称时只获取前10名记录
 		query = `
-			SELECT name, score, play_count, created_at 
+			SELECT name, score, total_score, play_count, created_at 
 			FROM scores 
 			ORDER BY score DESC 
 			LIMIT 10
@@ -556,7 +568,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	scores := []Score{}
 	for rows.Next() {
 		var s Score
-		if err := rows.Scan(&s.Name, &s.Score, &s.PlayCount, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.Name, &s.Score, &s.TotalScore, &s.PlayCount, &s.CreatedAt); err != nil {
 			fmt.Printf("Scan error: %v\n", err)
 			http.Error(w, "Failed to read scores", http.StatusInternalServerError)
 			return

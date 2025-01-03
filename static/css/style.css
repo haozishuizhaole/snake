@@ -33,7 +33,7 @@ body {
     height: auto;
     aspect-ratio: 1;
     box-sizing: border-box;
-    margin-top: 10px !important;
+    margin-top: 25px !important;
 }
 
 .game-area {
@@ -514,7 +514,7 @@ button:hover::after {
 /* 确保canvas在game-area中居中 */
 #gameCanvas {
     margin: 0 auto;
-    margin-top: 10px !important;
+    margin-top: 25px !important;
 }
 
 /* 调整开始按钮容器位置 */
@@ -769,7 +769,8 @@ button:hover::after {
 .current-player {
     display: flex;
     align-items: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 5px;
 }
 
 .separator {
@@ -778,9 +779,15 @@ button:hover::after {
 }
 
 #personalBest {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+#personalTotalScore {
     color: #4CAF50;
-    font-size: 14px;
-    animation: fadeIn 0.3s ease-in;
+    font-weight: bold;
 }
 
 .replay-icon {
@@ -1164,46 +1171,105 @@ button:hover::after {
 .rank-badge {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     padding: 2px 6px;
-    background-color: rgba(255, 215, 0, 0.1);
+    background-color: rgba(255, 193, 7, 0.1);
     border-radius: 12px;
-    margin-left: 8px;
-    font-size: 12px;
+    font-size: 14px;
+    cursor: help;
+    transition: all 0.3s ease;
+    position: relative;
 }
 
-.rank-icon {
+.rank-badge:hover {
+    background-color: rgba(255, 193, 7, 0.15);
+    transform: translateY(-1px);
+}
+
+.rank-badge .stat-icon {
     font-size: 14px;
 }
 
-.rank-number {
-    color: #666;
-    font-weight: bold;
+/* 统一所有徽章的基础样式 */
+.stat-badge,
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 14px;
+    cursor: help;
+    transition: all 0.3s ease;
+    position: relative;
 }
 
-/* 前三名特殊样式 */
-.rank-badge[data-rank="1"] {
-    background-color: rgba(255, 215, 0, 0.15);
+/* 为不同类型的徽章设置不同的背景色 */
+.stat-badge {
+    background-color: rgba(74, 175, 80, 0.1);
 }
 
-.rank-badge[data-rank="1"] .rank-number {
-    color: #FFD700;
+.rank-badge {
+    background-color: rgba(255, 193, 7, 0.1);
 }
 
-.rank-badge[data-rank="2"] {
-    background-color: rgba(192, 192, 192, 0.15);
+.stat-badge:hover {
+    background-color: rgba(74, 175, 80, 0.15);
+    transform: translateY(-1px);
 }
 
-.rank-badge[data-rank="2"] .rank-number {
-    color: #C0C0C0;
+.rank-badge:hover {
+    background-color: rgba(255, 193, 7, 0.15);
+    transform: translateY(-1px);
 }
 
-.rank-badge[data-rank="3"] {
-    background-color: rgba(205, 127, 50, 0.15);
+/* 统一提示框样式 */
+.stat-badge::after,
+.rank-badge::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
 }
 
-.rank-badge[data-rank="3"] .rank-number {
-    color: #CD7F32;
+.stat-badge::before,
+.rank-badge::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.stat-badge:hover::after,
+.rank-badge:hover::after {
+    opacity: 1;
+    visibility: visible;
+    bottom: -25px;
+}
+
+.stat-badge:hover::before,
+.rank-badge:hover::before {
+    opacity: 1;
+    visibility: visible;
+    bottom: -8px;
 }
 
 /* 添加排行榜底部提示样式 */
@@ -1438,4 +1504,153 @@ button:hover::after {
     .stat-item {
         width: 100%;
     }
+} 
+
+/* 添加统计徽章样式 */
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background-color: rgba(74, 175, 80, 0.1);
+    border-radius: 12px;
+    font-size: 14px;
+    cursor: help;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.stat-badge:hover {
+    background-color: rgba(74, 175, 80, 0.15);
+    transform: translateY(-1px);
+}
+
+.stat-badge .stat-icon {
+    font-size: 14px;
+}
+
+/* 添加悬停提示 */
+.stat-badge::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.stat-badge::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.stat-badge:hover::after {
+    opacity: 1;
+    visibility: visible;
+    bottom: -25px;
+}
+
+.stat-badge:hover::before {
+    opacity: 1;
+    visibility: visible;
+    bottom: -8px;
+}
+
+/* 调整分隔符样式 */
+.separator {
+    color: #999;
+    margin: 0 4px;
+}
+
+/* 优化布局 */
+#personalBest {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+} 
+
+/* 优化玩家信息对齐 */
+.current-player {
+    display: flex;
+    align-items: center;  /* 确保垂直居中对齐 */
+    gap: 5px;
+    height: 32px;  /* 固定高度确保对齐 */
+}
+
+/* 统一所有徽章的样式和对齐 */
+.stat-badge,
+.rank-badge {
+    display: inline-flex;
+    align-items: center;  /* 垂直居中对齐 */
+    gap: 4px;
+    padding: 4px 8px;  /* 调整内边距 */
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1;  /* 确保文字垂直居中 */
+    height: 24px;  /* 固定高度 */
+    box-sizing: border-box;
+}
+
+/* 统一图标大小和对齐 */
+.stat-badge .stat-icon,
+.rank-badge .stat-icon {
+    font-size: 14px;
+    line-height: 1;  /* 确保图标垂直居中 */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 统一文字对齐 */
+.stat-badge span,
+.rank-badge span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+/* 分隔符对齐 */
+.separator {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;  /* 与徽章高度一致 */
+    line-height: 1;
+    color: #999;
+    margin: 0 4px;
+}
+
+/* 更换昵称按钮对齐 */
+.change-name-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;  /* 与徽章高度一致 */
+    padding: 0 5px;
+    margin-left: 5px;
+}
+
+.change-name-btn .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 } 

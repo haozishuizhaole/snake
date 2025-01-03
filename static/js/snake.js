@@ -588,33 +588,127 @@ function draw() {
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 画蛇
-    ctx.fillStyle = 'green';
-    snake.forEach(segment => {
-        ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+    // 绘制蛇
+    snake.forEach((segment, index) => {
+        const x = segment.x * gridSize;
+        const y = segment.y * gridSize;
+        const size = gridSize - 2;
+
+        // 根据位置确定部位
+        if (index === 0) {
+            // 蛇头
+            drawSnakeHead(x, y, size);
+        } else if (index === snake.length - 1) {
+            // 蛇尾
+            drawSnakeTail(x, y, size);
+        } else {
+            // 蛇身
+            drawSnakeBody(x, y, size, index);
+        }
     });
 
-    // 优化食物的绘制
-    const fontSize = Math.floor(gridSize * 0.8); // 调整食物大小为格子的 80%
+    // 绘制食物（保持原有的食物绘制代码）
+    const fontSize = Math.floor(gridSize * 0.8);
     ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    // 添加食物发光效果
-    ctx.shadowColor = 'rgba(255, 165, 0, 0.5)';  // 橙色阴影
+    ctx.shadowColor = 'rgba(255, 165, 0, 0.5)';
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     
-    // 绘制食物
     ctx.fillText('🍊', 
         food.x * gridSize + gridSize/2,
         food.y * gridSize + gridSize/2
     );
     
-    // 重置阴影效果
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
+}
+
+// 绘制蛇头
+function drawSnakeHead(x, y, size) {
+    ctx.fillStyle = '#2E7D32';  // 深绿色
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, [size/2, size/2, 0, 0]);
+    ctx.fill();
+
+    // 添加眼睛
+    const eyeSize = size / 6;
+    ctx.fillStyle = 'white';
+    
+    // 根据移动方向调整眼睛位置
+    if (dx === 1) {  // 向右
+        ctx.fillRect(x + size * 0.7, y + size * 0.3, eyeSize, eyeSize);
+        ctx.fillRect(x + size * 0.7, y + size * 0.6, eyeSize, eyeSize);
+    } else if (dx === -1) {  // 向左
+        ctx.fillRect(x + size * 0.2, y + size * 0.3, eyeSize, eyeSize);
+        ctx.fillRect(x + size * 0.2, y + size * 0.6, eyeSize, eyeSize);
+    } else if (dy === -1) {  // 向上
+        ctx.fillRect(x + size * 0.3, y + size * 0.2, eyeSize, eyeSize);
+        ctx.fillRect(x + size * 0.6, y + size * 0.2, eyeSize, eyeSize);
+    } else {  // 向下
+        ctx.fillRect(x + size * 0.3, y + size * 0.7, eyeSize, eyeSize);
+        ctx.fillRect(x + size * 0.6, y + size * 0.7, eyeSize, eyeSize);
+    }
+
+    // 添加舌头
+    ctx.strokeStyle = '#FF1744';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (dx === 1) {  // 向右
+        ctx.moveTo(x + size, y + size/2);
+        ctx.lineTo(x + size + 6, y + size/2 - 3);
+        ctx.moveTo(x + size, y + size/2);
+        ctx.lineTo(x + size + 6, y + size/2 + 3);
+    } else if (dx === -1) {  // 向左
+        ctx.moveTo(x, y + size/2);
+        ctx.lineTo(x - 6, y + size/2 - 3);
+        ctx.moveTo(x, y + size/2);
+        ctx.lineTo(x - 6, y + size/2 + 3);
+    } else if (dy === -1) {  // 向上
+        ctx.moveTo(x + size/2, y);
+        ctx.lineTo(x + size/2 - 3, y - 6);
+        ctx.moveTo(x + size/2, y);
+        ctx.lineTo(x + size/2 + 3, y - 6);
+    } else {  // 向下
+        ctx.moveTo(x + size/2, y + size);
+        ctx.lineTo(x + size/2 - 3, y + size + 6);
+        ctx.moveTo(x + size/2, y + size);
+        ctx.lineTo(x + size/2 + 3, y + size + 6);
+    }
+    ctx.stroke();
+}
+
+// 绘制蛇身
+function drawSnakeBody(x, y, size, index) {
+    // 渐变色蛇身
+    const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
+    gradient.addColorStop(0, '#4CAF50');  // 浅绿色
+    gradient.addColorStop(1, '#388E3C');  // 深绿色
+    ctx.fillStyle = gradient;
+    
+    // 添加鳞片效果
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 4);
+    ctx.fill();
+
+    // 添加花纹
+    if (index % 2 === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size/4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// 绘制蛇尾
+function drawSnakeTail(x, y, size) {
+    ctx.fillStyle = '#388E3C';  // 深绿色
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, [0, 0, size/2, size/2]);
+    ctx.fill();
 }
 
 function changeDirection(event) {

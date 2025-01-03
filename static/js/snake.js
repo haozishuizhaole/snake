@@ -419,15 +419,19 @@ async function updatePersonalBest() {
         const personalBestRankElement = document.getElementById('personalBestRank');
         
         if (scores.length > 0) {
+            const playerData = scores[0];
+            personalBestElement.style.display = 'inline';
+            personalBestScoreElement.textContent = playerData.score;
+            
+            // 更新游戏次数
+            document.getElementById('personalPlayCount').textContent = playerData.playCount;
+            
             // 获取所有分数以确定排名
             const allScoresResponse = await fetch('/get-scores?' + new URLSearchParams(generateRequestSignature({})));
             const allScores = await allScoresResponse.json();
             
-            const playerScore = scores[0].score;
+            const playerScore = playerData.score;
             const rank = allScores.findIndex(s => s.score === playerScore) + 1;
-            
-            personalBestElement.style.display = 'inline';
-            personalBestScoreElement.textContent = playerScore;
             
             // 更新排名显示
             const rankNumber = personalBestRankElement.querySelector('.rank-number');
@@ -869,7 +873,10 @@ async function updateScoreboard() {
                 return `
                     <div class="ranking-item ${className}">
                         <span class="rank">${prefix}</span>
-                        <span class="player-name">${score.name || '未知玩家'}</span>
+                        <div class="player-info">
+                            <span class="player-name">${score.name || '未知玩家'}</span>
+                            <span class="player-play-count">游戏次数: ${score.playCount || 0}</span>
+                        </div>
                         <span class="player-score">${score.score || 0}</span>
                         <span class="replay-icon" 
                             title="点击观看回放" 

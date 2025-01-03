@@ -43,6 +43,7 @@ type Score struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
 	Score     int       `json:"score"`
+	PlayCount int       `json:"playCount"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -165,6 +166,49 @@ type CheatDetectionResult struct {
 	Violations []string
 }
 
+// 添加数据库版本控制和迁移功能
+const currentDBVersion = 2 // 当前数据库版本
+
+type Migration struct {
+	Version     int
+	Description string
+	SQL         string
+}
+
+// 定义数据库迁移列表
+var migrations = []Migration{
+	{
+		Version:     1,
+		Description: "Initial schema",
+		SQL: `
+			CREATE TABLE IF NOT EXISTS scores (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT NOT NULL UNIQUE,
+				score INTEGER NOT NULL,
+				replay TEXT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			);
+			
+			-- 创建版本控制表
+			CREATE TABLE IF NOT EXISTS schema_migrations (
+				version INTEGER PRIMARY KEY,
+				applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			);
+		`,
+	},
+	{
+		Version:     2,
+		Description: "Add play_count column",
+		SQL: `
+			ALTER TABLE scores ADD COLUMN play_count INTEGER DEFAULT 0;
+			
+			-- 更新现有记录的游戏次数
+			UPDATE scores SET play_count = 1 WHERE play_count IS NULL;
+		`,
+	},
+}
+
+// 修改数据库初始化函数
 func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./snake.db")
@@ -187,18 +231,64 @@ func initDB() error {
 		return fmt.Errorf("failed to enable foreign keys: %v", err)
 	}
 
-	// 创建新表（不删除旧表）
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS scores (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			score INTEGER NOT NULL,
-			replay TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	// 执行数据库迁移
+	if err := migrateDB(); err != nil {
+		return fmt.Errorf("failed to migrate database: %v", err)
+	}
+
+	return nil
+}
+
+// 添加数据库迁移函数
+func migrateDB() error {
+	// 创建迁移表（如果不存在）
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to create table: %v", err)
+		return fmt.Errorf("failed to create migrations table: %v", err)
+	}
+
+	// 获取当前数据库版本
+	var currentVersion int
+	err = db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&currentVersion)
+	if err != nil {
+		return fmt.Errorf("failed to get current database version: %v", err)
+	}
+
+	// 执行待执行的迁移
+	for _, migration := range migrations {
+		if migration.Version > currentVersion {
+			fmt.Printf("Applying migration %d: %s\n", migration.Version, migration.Description)
+
+			// 开始事务
+			tx, err := db.Begin()
+			if err != nil {
+				return fmt.Errorf("failed to begin transaction: %v", err)
+			}
+
+			// 执行迁移
+			if _, err := tx.Exec(migration.SQL); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to apply migration %d: %v", migration.Version, err)
+			}
+
+			// 记录迁移版本
+			if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES (?)", migration.Version); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to record migration %d: %v", migration.Version, err)
+			}
+
+			// 提交事务
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("failed to commit migration %d: %v", migration.Version, err)
+			}
+
+			fmt.Printf("Successfully applied migration %d\n", migration.Version)
+		}
 	}
 
 	return nil
@@ -364,11 +454,12 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 
 	// 更新数据库
 	_, err = tx.Exec(`
-		INSERT INTO scores (name, score, replay, created_at) 
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO scores (name, score, replay, play_count, created_at) 
+		VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
 			ON CONFLICT(name) DO UPDATE SET 
 				score = CASE WHEN excluded.score > score THEN excluded.score ELSE score END,
 				replay = CASE WHEN excluded.score > score THEN excluded.replay ELSE replay END,
+				play_count = play_count + 1,
 				created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
 	`, submission.Name, submission.Score, compressedReplay)
 
@@ -408,7 +499,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 			args = append(args, names[i])
 		}
 		query = fmt.Sprintf(`
-			SELECT name, score, created_at 
+			SELECT name, score, play_count, created_at 
 			FROM scores 
 			WHERE name IN (%s)
 			ORDER BY score DESC
@@ -416,17 +507,18 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 不传昵称时只获取前10名记录
 		query = `
-			SELECT name, score, created_at 
+			SELECT name, score, play_count, created_at 
 			FROM scores 
 			ORDER BY score DESC 
 			LIMIT 10
 		`
 	}
 
+	// 执行查询
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		fmt.Printf("Query error: %v\n", err)
-		http.Error(w, "Failed to get scores", http.StatusInternalServerError)
+		http.Error(w, "Failed to query scores", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -434,7 +526,7 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	scores := []Score{}
 	for rows.Next() {
 		var s Score
-		if err := rows.Scan(&s.Name, &s.Score, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.Name, &s.Score, &s.PlayCount, &s.CreatedAt); err != nil {
 			fmt.Printf("Scan error: %v\n", err)
 			http.Error(w, "Failed to read scores", http.StatusInternalServerError)
 			return
@@ -442,8 +534,22 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 		scores = append(scores, s)
 	}
 
+	// 检查遍历过程中是否有错误
+	if err = rows.Err(); err != nil {
+		fmt.Printf("Iteration error: %v\n", err)
+		http.Error(w, "Error reading scores", http.StatusInternalServerError)
+		return
+	}
+
+	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(scores)
+
+	// 返回结果
+	if err := json.NewEncoder(w).Encode(scores); err != nil {
+		fmt.Printf("Encode error: %v\n", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleGetReplay(w http.ResponseWriter, r *http.Request) {

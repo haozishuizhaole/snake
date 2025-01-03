@@ -64,6 +64,166 @@ const celebrations = [
     { text: "这就是实力的证明！无人能敌！", emoji: "🌠" }
 ];
 
+// 添加反外挂检测相关常量和变量
+const ANTI_CHEAT = {
+    MAX_SCORE_PER_FOOD: 10,
+    MIN_MOVE_INTERVAL: 50,  // 最小移动间隔（毫秒）
+    MAX_PERFECT_MOVES: 50,  // 连续完美移动的最大次数
+    DIRECTION_CHANGE_MIN_INTERVAL: 30  // 方向改变最小间隔（毫秒）
+};
+
+let lastMoveTime = 0;
+let perfectMoveCount = 0;
+let lastKeyPressTime = 0;
+let suspiciousActions = [];
+let gameStartTime = 0;
+let moveHistory = [];
+
+// 修改反外挂检测类
+class AntiCheatSystem {
+    constructor() {
+        this.violations = [];
+        this.checkInterval = null;
+        this.lastCheckTime = Date.now();
+        this.protectedFunctions = ['changeDirection', 'generateFood'];  // 减少监控的函数
+        this.originalFunctions = new Map();
+    }
+
+    // 初始化检测
+    init() {
+        this.violations = []; // 重置违规记录
+        this.startPeriodicChecks();
+        return this.isGameEnvironmentSafe();
+    }
+
+    // 开始周期性检查
+    startPeriodicChecks() {
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+        }
+        
+        this.lastCheckTime = Date.now();
+        this.checkInterval = setInterval(() => {
+            const now = Date.now();
+            const timeDiff = now - this.lastCheckTime;
+            
+            // 放宽时间检查标准
+            if (timeDiff > 2000 && timeDiff < 10000) {
+                console.warn('Suspicious time gap detected, but allowing game to continue');
+            }
+            
+            this.lastCheckTime = now;
+        }, 1000);
+    }
+
+    // 检查游戏环境
+    isGameEnvironmentSafe() {
+        // 检查是否在iframe中运行
+        if (window !== window.top) {
+            this.violations.push('Game running in iframe');
+            return false;
+        }
+
+        // 检查是否存在常见的作弊工具
+        const cheatTools = ['CheatEngine', 'Tampermonkey', 'Greasemonkey'];
+        for (const tool of cheatTools) {
+            if (window[tool]) {
+                this.violations.push(`Cheat tool detected: ${tool}`);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // 检查游戏行为
+    validateGameplay(moveData) {
+        const now = Date.now();
+        
+        // 放宽移动间隔检查
+        if (now - lastMoveTime < ANTI_CHEAT.MIN_MOVE_INTERVAL / 2) {
+            console.warn('Movement too fast, but allowing game to continue');
+        }
+
+        // 检查完美移动
+        if (this.isPerfectMove(moveData)) {
+            perfectMoveCount++;
+            if (perfectMoveCount > ANTI_CHEAT.MAX_PERFECT_MOVES * 2) {
+                this.violations.push('Too many perfect moves');
+                return false;
+            }
+        } else {
+            perfectMoveCount = 0;
+        }
+
+        // 记录移动历史
+        moveHistory.push({
+            time: now,
+            position: moveData.position,
+            direction: moveData.direction
+        });
+
+        // 保持最近的移动记录
+        if (moveHistory.length > 100) {
+            moveHistory.shift();
+        }
+
+        lastMoveTime = now;
+        return true;
+    }
+
+    // 检查是否是完美移动
+    isPerfectMove(moveData) {
+        const distanceToFood = Math.abs(moveData.position.x - food.x) + 
+                             Math.abs(moveData.position.y - food.y);
+        const isOptimalDirection = 
+            (food.x > moveData.position.x && moveData.direction.x > 0) ||
+            (food.x < moveData.position.x && moveData.direction.x < 0) ||
+            (food.y > moveData.position.y && moveData.direction.y > 0) ||
+            (food.y < moveData.position.y && moveData.direction.y < 0);
+
+        return isOptimalDirection && distanceToFood < distanceToFood;
+    }
+
+    // 检测可疑的移动模式
+    detectSuspiciousPattern() {
+        if (moveHistory.length < 50) return false;
+
+        // 检查重复模式
+        const pattern = moveHistory.slice(-20);
+        const patternString = JSON.stringify(pattern);
+        const fullString = JSON.stringify(moveHistory.slice(-40));
+        
+        return fullString.includes(patternString.repeat(2));
+    }
+
+    // 验证游戏分数
+    validateScore(currentScore, foodEaten) {
+        return currentScore <= foodEaten * ANTI_CHEAT.MAX_SCORE_PER_FOOD;
+    }
+
+    // 获取违规记录
+    getViolations() {
+        return this.violations;
+    }
+
+    // 清理
+    cleanup() {
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+            this.checkInterval = null;
+        }
+        
+        moveHistory = [];
+        this.violations = [];
+        perfectMoveCount = 0;
+        lastMoveTime = 0;
+    }
+}
+
+// 创建反外挂系统实例
+const antiCheat = new AntiCheatSystem();
+
 document.addEventListener('keydown', changeDirection);
 // 初始化游戏状态
 resetGame();
@@ -302,6 +462,12 @@ function startGame() {
     }
     if (gameStarted) return;
     
+    // 重置并初始化反外挂系统
+    antiCheat.cleanup();
+    if (!antiCheat.init()) {
+        console.warn('检测到潜在风险，但允许游戏继续');
+    }
+    
     // 检查是否可以开始新游戏
     const now = Date.now();
     const timeSinceLastGame = now - lastGameEndTime;
@@ -353,6 +519,18 @@ function actuallyStartGame() {
 
 function update() {
     if (isReplaying) return;
+    
+    const moveData = {
+        position: snake[0],
+        direction: { x: dx, y: dy }
+    };
+
+    // 验证移动
+    if (!antiCheat.validateGameplay(moveData)) {
+        gameOver();
+        alert('检测到异常操作，游戏结束');
+        return;
+    }
     
     const head = {x: snake[0].x + dx, y: snake[0].y + dy};
     
@@ -931,6 +1109,18 @@ function simulateOneStep(state) {
 
 // 修改提交分数函数
 async function submitScore() {
+    // 进行最终的反外挂检查
+    if (!antiCheat.validateScore(score, score/10)) {
+        alert('检测到异常分数，无法提交');
+        return;
+    }
+
+    if (antiCheat.getViolations().length > 0) {
+        alert('检测到游戏过程中存在异常，无法提交分数');
+        console.error('Anti-cheat violations:', antiCheat.getViolations());
+        return;
+    }
+
     try {
         const timestamp = Math.floor(Date.now() / 1000);
         const nonce = generateNonce();
@@ -1008,6 +1198,8 @@ async function submitScore() {
         const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
         const encouragementText = document.querySelector('.encouragement-text');
         encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
+    } finally {
+        antiCheat.cleanup();
     }
 }
 

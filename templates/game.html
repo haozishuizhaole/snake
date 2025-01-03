@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>贪吃蛇游戏</title>
+    <link rel="stylesheet" href="static/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+    <!-- 初始昵称输入界面 -->
+    <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-content">
+            <div class="welcome-header">
+                <h1>🐍 蛇年大吉 🐍</h1>
+                <p class="welcome-subtitle">祝你工作顺遂 💼 薪资上涨 💰</p>
+                <p class="welcome-extra">像蛇一样灵活，像龙一样腾飞 🚀</p>
+                <div class="ai-signature">
+                    <span class="ai-badge">🤖 AI Generated</span>
+                    <p class="ai-message">由 Claude 3.5 Sonnet 智能助手生成</p>
+                </div>
+            </div>
+            <div class="name-input">
+                <input type="text" id="playerName" placeholder="请输入你的昵称">
+                <button onclick="submitName()" title="按回车键确认">进入游戏 ⏎</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏主界面（初始隐藏） -->
+    <div class="container" id="gameContainer" style="display: none;">
+        <div class="game-container">
+            <!-- 游戏区域 -->
+            <div class="game-area">
+                <div class="game-overlay">
+                    <div class="score">分数: <span id="scoreSpan">0</span></div>
+                    <div class="current-player">玩家: <span id="currentPlayerName"></span></div>
+                </div>
+                <div class="start-screen" id="startScreen">
+                    <button onclick="startGame()" title="按空格键开始">开始新游戏 [空格]</button>
+                </div>
+                <div class="countdown" id="countdown"></div>
+                <canvas id="gameCanvas" width="600" height="600"></canvas>
+            </div>
+            <div class="version-info">
+                <div class="version-header" onclick="toggleVersionHistory()">
+                    <h3>
+                        <span class="version-title">📝 更新记录</span>
+                        <span class="current-version">v1.0</span>
+                    </h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="version-content" style="display: none;">
+                    <h4>v1.0 (2024-03-25)</h4>
+                    <div class="version-section">
+                        <h5>✨ 新功能</h5>
+                        <div class="update-items">
+                            <div class="update-item">🎮 基础贪吃蛇游戏功能</div>
+                            <div class="update-item">🏆 实时排行榜系统</div>
+                            <div class="update-item">🎯 游戏准备倒计时</div>
+                            <div class="update-item">🎉 破纪录特效</div>
+                        </div>
+                    </div>
+                    <div class="version-section">
+                        <h5>🎨 体验优化</h5>
+                        <div class="update-items">
+                            <div class="update-item">⌨️ 支持键盘快捷操作</div>
+                            <div class="update-item">🍊 食物更换为橙子表情</div>
+                            <div class="update-item">💫 添加按钮悬停提示</div>
+                            <div class="update-item">📱 优化界面布局和样式</div>
+                        </div>
+                    </div>
+                    <div class="version-section">
+                        <h5>🐛 问题修复</h5>
+                        <div class="update-items">
+                            <div class="update-item">🔧 修复连续按键导致的穿墙问题</div>
+                            <div class="update-item">🔒 增加防作弊机制</div>
+                            <div class="update-item">⚡️ 优化游戏性能</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="right-sidebar">
+            <div class="game-instructions">
+                <h3>🎮 游戏玩法</h3>
+                <div class="instructions-content">
+                    <ul>
+                        <li>🎯 使用方向键（↑↓←→）控制小蛇移动</li>
+                        <li>🐍 初始小蛇长度为3格，开始冒险吧！</li>
+                        <li>🍊 吃到橙子可得10分，同时长度+1</li>
+                        <li>💥 注意不要撞墙或咬到自己哦~</li>
+                        <li>🎯 游戏开始前有3秒准备时间</li>
+                        <li>🔄 游戏结束后按空格键继续</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="scoreboard">
+                <h2>排行榜</h2>
+                <div id="rankings"></div>
+            </div>
+        </div>
+    </div>
+    <div id="gameOver" class="modal">
+        <div class="modal-content">
+            <h2>游戏结束</h2>
+            <div id="newRecord" style="display: none;">
+                <h3 style="color: #FFD700;">🎉 新纪录！ 🎉</h3>
+                <p style="color: #4CAF50;">恭喜你打破了个人最高分！</p>
+            </div>
+            <p>你的分数: <span id="finalScore">0</span></p>
+            <p>玩家: <span id="playerNameDisplay"></span></p>
+            <button onclick="hideGameOver()" title="按空格键继续">继续游戏 [空格]</button>
+        </div>
+        <canvas id="confettiCanvas"></canvas>
+    </div>
+    <script>
+        // 将会话ID传递给前端
+        const sessionId = "{{.SessionID}}";
+        const secretKey = "{{.SecretKey}}";
+    </script>
+    <script src="static/js/snake.js"></script>
+</body>
+</html> 

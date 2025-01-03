@@ -1212,6 +1212,9 @@ async function submitScore() {
             updatePersonalBest()
         ]);
         
+        // 更新统计数据
+        await updateGameStats();
+        
     } catch (error) {
         console.error('提交分数失败:', error);
         alert('提交分数失败: ' + error.message);
@@ -1544,4 +1547,41 @@ function toggleInstructions() {
             moreContent.style.display = 'none';
         }, 300);
     }
+}
+
+// 添加更新统计数据的函数
+async function updateGameStats() {
+    try {
+        const params = {};
+        const signedParams = generateRequestSignature(params);
+        
+        const response = await fetch('/get-stats?' + new URLSearchParams(signedParams));
+        
+        if (!response.ok) {
+            throw new Error('获取统计数据失败');
+        }
+        
+        const stats = await response.json();
+        
+        // 更新显示
+        document.getElementById('totalPlayers').textContent = stats.totalPlayers.toLocaleString();
+        document.getElementById('totalGames').textContent = stats.totalGames.toLocaleString();
+        document.getElementById('totalScore').textContent = stats.totalScore.toLocaleString();
+        
+    } catch (error) {
+        console.error('更新统计数据失败:', error);
+    }
+}
+
+// 在页面加载和游戏结束时更新统计
+document.addEventListener('DOMContentLoaded', updateGameStats);
+
+// 修改 submitScore 函数，在提交分数后更新统计
+async function submitScore() {
+    // ... 现有代码 ...
+    
+    // 更新统计数据
+    await updateGameStats();
+    
+    // ... 现有代码 ...
 } 

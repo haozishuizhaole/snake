@@ -88,14 +88,10 @@ body {
 }
 
 .scoreboard {
-    width: 100%;
     background-color: #fff;
-    padding: 15px;
+    padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    height: fit-content;
-    overflow-y: auto;
-    box-sizing: border-box;
     flex: 1;
     min-height: 300px;
 }
@@ -675,7 +671,6 @@ button:hover::after {
     padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
 }
 
 .game-instructions h3 {
@@ -1313,4 +1308,134 @@ button:hover::after {
 .ranking-item.silver .player-play-count,
 .ranking-item.bronze .player-play-count {
     color: rgba(0, 0, 0, 0.4);
+}
+
+/* 游戏统计样式 */
+.game-stats {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.game-stats h2 {
+    font-size: 20px;
+    margin-top: 0;
+    text-align: center;
+    margin-bottom: 25px;
+    color: #333;
+    position: relative;
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.game-stats h2::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 2px;
+    background-color: #4CAF50;
+}
+
+.stats-content {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px 10px;
+    background: linear-gradient(135deg, rgba(74, 175, 80, 0.05), rgba(74, 175, 80, 0.1));
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    position: relative;
+    cursor: help;
+}
+
+.stat-icon {
+    font-size: 24px;
+    color: #4CAF50;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 8px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+}
+
+.stat-label {
+    display: none;
+}
+
+.stat-item::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.stat-item::before {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 100;
+}
+
+.stat-item:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, rgba(74, 175, 80, 0.1), rgba(74, 175, 80, 0.15));
+}
+
+.stat-item:hover::after,
+.stat-item:hover::before {
+    opacity: 1;
+    visibility: visible;
+    bottom: -30px;
+}
+
+.stat-item:hover::before {
+    bottom: -12px;
+}
+
+/* 适配小屏幕 */
+@media (max-width: 768px) {
+    .stats-content {
+        flex-direction: column;
+    }
+    
+    .stat-item {
+        width: 100%;
+    }
 } 

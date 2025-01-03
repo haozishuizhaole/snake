@@ -294,6 +294,35 @@ func migrateDB() error {
 	return nil
 }
 
+// 添加统计数据结构
+type GameStats struct {
+	TotalPlayers int `json:"totalPlayers"`
+	TotalGames   int `json:"totalGames"`
+	TotalScore   int `json:"totalScore"`
+}
+
+// 添加获取统计数据的处理函数
+func handleGetStats(w http.ResponseWriter, r *http.Request) {
+	var stats GameStats
+
+	// 获取统计数据
+	err := db.QueryRow(`
+		SELECT 
+			COUNT(DISTINCT name) as total_players,
+			SUM(play_count) as total_games,
+			SUM(score) as total_score
+		FROM scores
+	`).Scan(&stats.TotalPlayers, &stats.TotalGames, &stats.TotalScore)
+
+	if err != nil {
+		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
 func main() {
 	// 初始化数据库
 	if err := initDB(); err != nil {
@@ -317,6 +346,7 @@ func main() {
 	r.HandleFunc("/submit-score", handleSubmitScore)
 	r.HandleFunc("/get-scores", validateRequest(handleGetScores))
 	r.HandleFunc("/get-replay", validateRequest(handleGetReplay))
+	r.HandleFunc("/get-stats", validateRequest(handleGetStats))
 
 	port := 8080
 	fmt.Printf("Server starting at http://localhost:%d\n", port)

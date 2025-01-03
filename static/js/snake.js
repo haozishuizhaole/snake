@@ -23,25 +23,30 @@ let aiGameLoop;
 let aiStartTimeout = null;
 let gameSteps = [];
 let isReplaying = false;
+let lastDirectionChange = 0;
 
 document.addEventListener('keydown', changeDirection);
-updateScoreboard();
 // 初始化游戏状态
 resetGame();
 // 绘制初始状态
 draw();
 
 // 获取玩家历史最高分
-function getPersonalBestScore() {
-    fetch('/get-scores')
-        .then(response => response.json())
-        .then(scores => {
-            // 在所有分数中找到当前玩家的最高分
-            const playerScores = scores.filter(s => s.name === playerName);
-            if (playerScores.length > 0) {
-                personalBestScore = Math.max(...playerScores.map(s => s.score));
-            }
-        });
+async function getPersonalBestScore() {
+    try {
+        const response = await fetch('/get-scores');
+        if (!response.ok) {
+            throw new Error('获取分数失败');
+        }
+        const scores = await response.json();
+        // 在所有分数中找到当前玩家的最高分
+        const playerScores = scores.filter(s => s.name === playerName);
+        if (playerScores.length > 0) {
+            personalBestScore = Math.max(...playerScores.map(s => s.score));
+        }
+    } catch (error) {
+        console.error('获取历史最高分失败:', error);
+    }
 }
 
 // 提交玩家名字
@@ -86,6 +91,16 @@ function changeName() {
     }
     gameStarted = false;
     
+    // 重新获取新的 sessionId
+    fetch('/')
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            sessionId = doc.getElementById('sessionId').value;
+        })
+        .catch(error => console.error('获取新 sessionId 失败:', error));
+    
     // 重置欢迎界面
     const welcomeScreen = document.getElementById('welcomeScreen');
     welcomeScreen.style.cssText = `
@@ -117,29 +132,33 @@ function changeName() {
 }
 
 // 修改页面加载逻辑
-document.addEventListener('DOMContentLoaded', () => {
-    // 如果已有存储的昵称，直接进入游戏界面
-    if (playerName) {
-        showGameContainer();
-    } else {
-        // 显示欢迎界面
-        const welcomeScreen = document.getElementById('welcomeScreen');
-        welcomeScreen.style.cssText = `
-            display: flex;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #f0f0f0;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        `;
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // 更新排行榜
+        await updateScoreboard();
+        
+        // 如果已有存储的昵称，直接进入游戏界面
+        if (playerName) {
+            showGameContainer();
+        } else {
+            // 显示欢迎界面
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            welcomeScreen.style.cssText = `
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #f0f0f0;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+            `;
+        }
+    } catch (error) {
+        console.error('初始化失败:', error);
     }
-    
-    // 更新排行榜
-    updateScoreboard();
 });
 
 // 修改显示游戏容器的函数
@@ -195,9 +214,10 @@ function startGame() {
     
     // 检查是否可以开始新游戏
     const now = Date.now();
-    const timeSinceLastGame = (now - lastGameEndTime) / 1000;
-    if (timeSinceLastGame < minInterval) {
-        alert(`请等待 ${Math.ceil(minInterval - timeSinceLastGame)} 秒后再开始新游戏`);
+    const timeSinceLastGame = now - lastGameEndTime;
+    if (timeSinceLastGame < minInterval * 1000) {  // 转换为毫秒
+        const waitTime = Math.ceil((minInterval * 1000 - timeSinceLastGame) / 1000);
+        alert(`请等待 ${waitTime} 秒后再开始新游戏`);
         return;
     }
     
@@ -302,6 +322,9 @@ function changeDirection(event) {
         event.preventDefault();
     }
 
+    // 如果游戏未开始或正在回放，不处理方向改变
+    if (!gameStarted || isReplaying) return;
+
     const LEFT = 37;
     const RIGHT = 39;
     const UP = 38;
@@ -313,22 +336,53 @@ function changeDirection(event) {
     const goingRight = dx === 1;
     const goingLeft = dx === -1;
 
-    if (keyPressed === LEFT && !goingRight) {
-        dx = -1;
-        dy = 0;
+    // 检查距离上次方向改变的时间间隔（改为50ms）
+    const now = Date.now();
+    if (now - lastDirectionChange < 50) {
+        return;
     }
-    if (keyPressed === UP && !goingDown) {
-        dx = 0;
-        dy = -1;
+
+    let newDx = dx;
+    let newDy = dy;
+
+    // 允许180度转向，但需要检查是否安全
+    if (keyPressed === LEFT) {
+        newDx = -1;
+        newDy = 0;
+    } else if (keyPressed === UP) {
+        newDx = 0;
+        newDy = -1;
+    } else if (keyPressed === RIGHT) {
+        newDx = 1;
+        newDy = 0;
+    } else if (keyPressed === DOWN) {
+        newDx = 0;
+        newDy = 1;
+    } else {
+        return; // 如果是无效的方向改变，直接返回
     }
-    if (keyPressed === RIGHT && !goingLeft) {
-        dx = 1;
-        dy = 0;
+
+    // 检查新方向是否会导致立即碰撞
+    const head = snake[0];
+    const nextPos = {
+        x: head.x + newDx,
+        y: head.y + newDy
+    };
+
+    // 检查是否会撞墙或撞到自己（除了尾部）
+    const willEatFood = nextPos.x === food.x && nextPos.y === food.y;
+    const snakeBody = willEatFood ? snake : snake.slice(0, -1);
+    
+    if (nextPos.x < 0 || nextPos.x >= tileCount || 
+        nextPos.y < 0 || nextPos.y >= tileCount || 
+        snakeBody.some(segment => segment.x === nextPos.x && segment.y === nextPos.y)) {
+        return;
     }
-    if (keyPressed === DOWN && !goingUp) {
-        dx = 0;
-        dy = 1;
-    }
+
+    // 更新方向
+    dx = newDx;
+    dy = newDy;
+    lastDirectionChange = now;
 }
 
 function generateFood() {
@@ -340,14 +394,15 @@ function checkCollision(head) {
     return snake.some(segment => segment.x === head.x && segment.y === head.y);
 }
 
-// 撒花特效类
+// 添加 Confetti 类
 class Confetti {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.particles = [];
-        this.active = false;
+        this.isActive = false;
         
+        // 设置画布尺寸
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
     }
@@ -357,107 +412,74 @@ class Confetti {
         this.canvas.height = window.innerHeight;
     }
 
-    createParticle() {
-        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
-        return {
-            x: Math.random() * this.canvas.width,
-            y: -20,
-            rotation: Math.random() * 360,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            size: Math.random() * 10 + 5,
-            speedY: Math.random() * 3 + 2,
-            speedRotation: Math.random() * 10 - 5,
-            speedX: Math.random() * 4 - 2,
-        };
-    }
-
     start() {
-        this.active = true;
+        if (this.isActive) return;
+        this.isActive = true;
         this.particles = [];
         this.animate();
-        // 每帧添加新的粒子
-        this.addParticlesInterval = setInterval(() => {
-            if (this.particles.length < 100) {  // 限制最大粒子数
-                this.particles.push(this.createParticle());
-            }
-        }, 50);
     }
 
     stop() {
-        this.active = false;
-        clearInterval(this.addParticlesInterval);
+        this.isActive = false;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    createParticle() {
+        return {
+            x: Math.random() * this.canvas.width,
+            y: -10,
+            size: Math.random() * 5 + 5,
+            color: `hsl(${Math.random() * 360}, 80%, 60%)`,
+            speedX: Math.random() * 6 - 3,
+            speedY: Math.random() * 3 + 2,
+            rotation: Math.random() * 360,
+            rotationSpeed: Math.random() * 10 - 5
+        };
     }
 
     animate() {
-        if (!this.active) return;
+        if (!this.isActive) return;
 
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        this.particles.forEach((p, index) => {
-            p.y += p.speedY;
+        // 添加新粒子
+        if (this.particles.length < 100) {
+            this.particles.push(this.createParticle());
+        }
+
+        // 更新和绘制粒子
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
             p.x += p.speedX;
-            p.rotation += p.speedRotation;
+            p.y += p.speedY;
+            p.rotation += p.rotationSpeed;
 
             this.ctx.save();
             this.ctx.translate(p.x, p.y);
             this.ctx.rotate((p.rotation * Math.PI) / 180);
             this.ctx.fillStyle = p.color;
-            this.ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
             this.ctx.restore();
 
-            // 移除超出屏幕的粒子
-            if (p.y > this.canvas.height + 20) {
-                this.particles.splice(index, 1);
+            // 移除超出画布的粒子
+            if (p.y > this.canvas.height + 10) {
+                this.particles.splice(i, 1);
             }
-        });
+        }
 
         requestAnimationFrame(() => this.animate());
     }
-
-    startSpecial() {
-        this.active = true;
-        this.particles = [];
-        this.animate();
-        
-        // 创建更多、更绚丽的粒子
-        this.addParticlesInterval = setInterval(() => {
-            if (this.particles.length < 200) {  // 增加粒子数量
-                // 添加普通粒子
-                this.particles.push(this.createParticle());
-                
-                // 添加特殊粒子
-                this.particles.push(this.createSpecialParticle());
-            }
-        }, 30);  // 更快的粒子生成速度
-    }
-    
-    createSpecialParticle() {
-        const colors = [
-            '#FFD700', // 金色
-            '#FFA500', // 橙色
-            '#FF69B4', // 粉色
-            '#00FF00', // 亮绿
-            '#FF1493', // 深粉色
-            '#4169E1'  // 皇家蓝
-        ];
-        
-        return {
-            x: Math.random() * this.canvas.width,
-            y: -20,
-            rotation: Math.random() * 360,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            size: Math.random() * 15 + 10,  // 更大的粒子
-            speedY: Math.random() * 2 + 1,
-            speedRotation: Math.random() * 15 - 7.5,
-            speedX: Math.random() * 6 - 3,
-            type: 'special',
-            shine: Math.random() * 360  // 用于闪烁效果
-        };
-    }
 }
 
-// 创建撒花效果实例
+// 创建全局 confetti 实例
 const confetti = new Confetti(document.getElementById('confettiCanvas'));
+
+// 添加开始特效的函数
+function startConfetti() {
+    confetti.start();
+    // 5秒后停止特效
+    setTimeout(() => confetti.stop(), 5000);
+}
 
 function gameOver() {
     if (gameLoop) {
@@ -467,33 +489,7 @@ function gameOver() {
     gameStarted = false;
     lastGameEndTime = Date.now();
 
-    // 获取当前最高分进行比较
-    fetch('/get-scores')
-        .then(response => response.json())
-        .then(scores => {
-            // 获取历史最高分
-            const highestScore = scores.length > 0 ? Math.max(...scores.map(s => s.score)) : 0;
-            const isNewRecord = score > highestScore;
-
-            // 显示游戏结束界面
-            const gameOverDiv = document.getElementById('gameOver');
-            gameOverDiv.style.display = 'block';
-            
-            // 只有在真正打破记录时才显示特效
-            if (isNewRecord) {
-                startConfetti();
-                document.getElementById('newRecord').style.display = 'block';
-            } else {
-                document.getElementById('newRecord').style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('获取最高分失败:', error);
-            // 出错时保守处理，不显示破纪录提示
-            document.getElementById('newRecord').style.display = 'none';
-        });
-
-    // 提交分数
+    // 提交分数并处理结果
     submitScore();
 }
 
@@ -524,24 +520,16 @@ async function updateScoreboard() {
         }
         
         const scores = await response.json();
-        if (!Array.isArray(scores)) {
-            console.error('Invalid scores data:', scores);
-            return;
-        }
-
         const rankings = document.getElementById('rankings');
         if (!rankings) {
-            console.error('Rankings element not found');
-            return;
+            throw new Error('找不到排行榜元素');
         }
-
-        // 生成排行榜 HTML
+        
         const rankingsHtml = scores.length > 0 ? scores
             .map((score, index) => {
                 let prefix = `${index + 1}.`;
                 let className = '';
                 
-                // 为前三名添加奖杯图标和特殊样式
                 if (index === 0) {
                     prefix = '🏆';
                     className = 'gold';
@@ -553,39 +541,30 @@ async function updateScoreboard() {
                     className = 'bronze';
                 }
                 
-                // 对回放数据进行编码
-                const encodedReplay = score.replay ? 
-                    encodeURIComponent(score.replay) : '[]';
-                
                 return `
                     <div class="ranking-item ${className}">
                         <span class="rank">${prefix}</span>
                         <span class="player-name">${score.name || '未知玩家'}</span>
                         <span class="player-score">${score.score || 0}</span>
-                        ${score.replay && score.replay !== '[]' ? 
-                            `<span class="replay-icon" 
-                                title="点击观看回放" 
-                                onclick="handleReplayClick(this, '${encodedReplay}')"
-                                data-replay="${encodedReplay}">▶️</span>` : 
-                            ''}
+                        <span class="replay-icon" 
+                            title="点击观看回放" 
+                            onclick="handleReplayClick(this, '${score.name}')"
+                            data-player="${score.name}">▶️</span>
                     </div>
                 `;
             })
             .join('') : '<div class="ranking-item">暂无记录</div>';
 
         rankings.innerHTML = rankingsHtml;
-
+        
         // 更新最高分
-        if (scores.length > 0) {
+        const highScoreElement = document.getElementById('highScore');
+        if (highScoreElement && scores.length > 0) {
             const highScore = scores[0];
-            const highScoreElement = document.getElementById('highScore');
-            if (highScoreElement) {
-                highScoreElement.textContent = `最高分: ${highScore.score || 0}`;
-            }
+            highScoreElement.textContent = `最高分: ${highScore.score || 0}`;
         }
     } catch (error) {
         console.error('更新排行榜出错:', error);
-        // 显示错误信息给用户
         const rankings = document.getElementById('rankings');
         if (rankings) {
             rankings.innerHTML = '<div class="ranking-item error">获取排行榜失败，请稍后再试</div>';
@@ -594,25 +573,34 @@ async function updateScoreboard() {
 }
 
 // 修改回放点击处理函数
-function handleReplayClick(element, encodedReplayData) {
-    // 检查是否正在回放中
-    if (isReplaying) {
-        return;
+async function handleReplayClick(element, playerName) {
+    if (isReplaying) return;
+    
+    try {
+        // 禁用点击
+        element.style.opacity = '0.5';
+        element.style.pointerEvents = 'none';
+        
+        // 获取回放数据
+        const response = await fetch(`/get-replay?name=${encodeURIComponent(playerName)}`);
+        if (!response.ok) {
+            throw new Error('获取回放数据失败');
+        }
+        
+        const replayData = await response.text();
+        // 开始回放
+        await startReplay(replayData, element, playerName);
+    } catch (error) {
+        console.error('回放错误:', error);
+        alert('获取回放数据失败，请稍后再试');
+    } finally {
+        resetReplayButton(element);
     }
-    
-    // 禁用点击
-    element.style.opacity = '0.5';
-    element.style.pointerEvents = 'none';
-    
-    // 开始回放并处理完成后的状态
-    startReplay(encodedReplayData, element);
 }
 
 // 修改回放函数
-function startReplay(encodedReplayData, replayButton) {
+function startReplay(replayData, replayButton, playerName) {
     try {
-        const replayData = decodeURIComponent(encodedReplayData);
-        
         if (!replayData || replayData === '[]') {
             alert('暂无回放数据');
             resetReplayButton(replayButton);
@@ -641,9 +629,8 @@ function startReplay(encodedReplayData, replayButton) {
         const replayIndicator = document.createElement('div');
         replayIndicator.className = 'replaying';
         
-        // 获取玩家昵称和分数
+        // 获取玩家分数
         const playerItem = replayButton.closest('.ranking-item');
-        const playerName = playerItem.querySelector('.player-name').textContent;
         const playerScore = playerItem.querySelector('.player-score').textContent;
         
         // 构建提示文字
@@ -800,7 +787,7 @@ function simulateOneStep(state) {
     return newState;
 }
 
-// 修改提交分数时的数据处理
+// 修改提交分数函数
 async function submitScore() {
     try {
         const timestamp = Math.floor(Date.now() / 1000);
@@ -812,7 +799,7 @@ async function submitScore() {
             timestamp: timestamp,
             nonce: nonce,
             hash: generateScoreHash(sessionId, score, timestamp, nonce),
-            replay: JSON.stringify(gameSteps)  // 直接提交完整记录
+            replay: JSON.stringify(gameSteps)
         };
 
         const response = await fetch('/submit-score', {
@@ -824,14 +811,41 @@ async function submitScore() {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText);
+            throw new Error(await response.text());
         }
 
+        // 处理响应
+        const result = await response.json();
+        
+        // 显示游戏结束界面
+        const gameOverDiv = document.getElementById('gameOver');
+        gameOverDiv.style.display = 'block';
+        
+        // 更新分数和玩家名称显示
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('playerNameDisplay').textContent = playerName;
+        
+        // 根据是否破纪录显示特效
+        if (result.isNewRecord) {
+            startConfetti();
+            document.getElementById('newRecord').style.display = 'block';
+        } else {
+            document.getElementById('newRecord').style.display = 'none';
+        }
+
+        // 更新排行榜
         await updateScoreboard();
+        
     } catch (error) {
         console.error('提交分数失败:', error);
         alert('提交分数失败: ' + error.message);
+        
+        // 出错时也显示游戏结束界面，但不显示破纪录提示
+        const gameOverDiv = document.getElementById('gameOver');
+        gameOverDiv.style.display = 'block';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('playerNameDisplay').textContent = playerName;
+        document.getElementById('newRecord').style.display = 'none';
     }
 }
 
@@ -1078,79 +1092,4 @@ function stopAIGame() {
         aiStartTimeout = null;
     }
     resetGame();
-}
-
-// 修改回放功能
-function startReplay(encodedReplayData) {
-    try {
-        const replayData = decodeURIComponent(encodedReplayData);
-        
-        if (!replayData || replayData === '[]') {
-            alert('暂无回放数据');
-            return;
-        }
-
-        isReplaying = true;
-        const steps = JSON.parse(replayData);
-        
-        if (!Array.isArray(steps) || steps.length === 0) {
-            alert('回放数据无效');
-            return;
-        }
-
-        let stepIndex = 0;
-        
-        // 隐藏开始界面
-        document.getElementById('startScreen').style.display = 'none';
-        
-        // 停止 AI 游戏
-        stopAIGame();
-        
-        // 添加回放提示
-        const replayIndicator = document.createElement('div');
-        replayIndicator.className = 'replaying';
-        
-        // 获取玩家昵称和分数
-        const playerItem = event.target.closest('.ranking-item');
-        const playerName = playerItem.querySelector('.player-name').textContent;
-        const playerScore = playerItem.querySelector('.player-score').textContent;
-        
-        // 构建提示文字
-        replayIndicator.innerHTML = `
-            <span class="replay-icon">🎬</span>
-            <span class="replay-text">正在回放 <strong>${playerName}</strong> 的精彩记录</span>
-            <span class="replay-score">${playerScore}分</span>
-        `;
-        
-        document.querySelector('.game-area').appendChild(replayIndicator);
-        
-        function playNextStep() {
-            if (stepIndex >= steps.length) {
-                isReplaying = false;
-                document.getElementById('startScreen').style.display = 'block';
-                replayIndicator.remove();
-                return;
-            }
-            
-            const step = steps[stepIndex];
-            snake = JSON.parse(JSON.stringify(step.snake));
-            food = {...step.food};
-            score = step.score;
-            dx = step.dx;
-            dy = step.dy;
-            
-            document.getElementById('scoreSpan').textContent = score;
-            draw();
-            
-            stepIndex++;
-            setTimeout(playNextStep, 100);  // 控制回放速度
-        }
-        
-        playNextStep();
-    } catch (error) {
-        console.error('回放错误:', error);
-        alert('回放出错，请稍后再试');
-        isReplaying = false;
-        document.getElementById('startScreen').style.display = 'block';
-    }
 } 

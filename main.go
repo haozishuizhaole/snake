@@ -38,8 +38,13 @@ type Score struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
 	Score     int       `json:"score"`
-	Replay    string    `json:"replay"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+// 添加提交分数的响应结构体
+type ScoreResponse struct {
+	IsNewRecord bool `json:"isNewRecord"`
+	HighScore   int  `json:"highScore"`
 }
 
 const (
@@ -111,6 +116,7 @@ func main() {
 	r.HandleFunc("/", handleGame)
 	r.HandleFunc("/submit-score", handleSubmitScore)
 	r.HandleFunc("/get-scores", handleGetScores)
+	r.HandleFunc("/get-replay", handleGetReplay)
 
 	port := 8080
 	fmt.Printf("Server starting at http://localhost:%d\n", port)
@@ -194,55 +200,36 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 只有当新分数高于历史最高分时才更新数据库
-	if submission.Score > highScore {
-		_, err = db.Exec(`
-			INSERT INTO scores (name, score, replay, created_at) 
-			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-			ON CONFLICT(name) DO UPDATE SET 
-				score = excluded.score,
-				replay = excluded.replay,
-				created_at = CURRENT_TIMESTAMP
-		`, submission.Name, submission.Score, compressedReplay)
+	// 判断是否破纪录（与玩家自己的历史最高分比较）
+	isNewRecord := submission.Score > highScore
 
-		if err != nil {
-			fmt.Printf("Database error when updating score: %v\n", err)
-			http.Error(w, "Failed to save score", http.StatusInternalServerError)
-			return
-		}
-	}
+	// 更新数据库
+	_, err = db.Exec(`
+		INSERT INTO scores (name, score, replay, created_at) 
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(name) DO UPDATE SET 
+			score = CASE WHEN excluded.score > score THEN excluded.score ELSE score END,
+			replay = CASE WHEN excluded.score > score THEN excluded.replay ELSE replay END,
+			created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
+	`, submission.Name, submission.Score, compressedReplay)
 
-	// 更新会话信息
-	sessionsMap.Lock()
-	sessions[submission.SessionID] = sessionInfo{
-		StartTime:  session.StartTime,
-		LastScore:  submission.Score,
-		LastSubmit: time.Now(),
-	}
-	sessionsMap.Unlock()
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func handleGetScores(w http.ResponseWriter, r *http.Request) {
-	// 添加错误日志
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Recovered from panic in handleGetScores: %v\n", r)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	}()
-
-	// 检查数据库连接
-	if err := db.Ping(); err != nil {
-		fmt.Printf("Database connection error: %v\n", err)
-		http.Error(w, "Database connection error", http.StatusInternalServerError)
+	if err != nil {
+		fmt.Printf("Database error when updating score: %v\n", err)
+		http.Error(w, "Failed to save score", http.StatusInternalServerError)
 		return
 	}
 
-	// 修改查询语句，确保包含所有需要的列
+	// 返回是否破纪录的信息
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ScoreResponse{
+		IsNewRecord: isNewRecord,
+		HighScore:   highScore,
+	})
+}
+
+func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
-		SELECT name, score, replay, created_at 
+		SELECT name, score, created_at 
 		FROM scores 
 		ORDER BY score DESC 
 		LIMIT 10
@@ -257,40 +244,49 @@ func handleGetScores(w http.ResponseWriter, r *http.Request) {
 	scores := []Score{}
 	for rows.Next() {
 		var s Score
-		var compressedReplay string
-		if err := rows.Scan(&s.Name, &s.Score, &compressedReplay, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.Name, &s.Score, &s.CreatedAt); err != nil {
 			fmt.Printf("Scan error: %v\n", err)
 			http.Error(w, "Failed to read scores", http.StatusInternalServerError)
 			return
 		}
-
-		// 解压缩回放数据
-		if compressedReplay != "" {
-			decompressedReplay, err := decompressReplay(compressedReplay)
-			if err != nil {
-				fmt.Printf("Failed to decompress replay for %s: %v\n", s.Name, err)
-				s.Replay = "[]" // 如果解压失败，返回空数组
-			} else {
-				s.Replay = decompressedReplay
-			}
-		} else {
-			s.Replay = "[]"
-		}
-
 		scores = append(scores, s)
 	}
 
-	if err = rows.Err(); err != nil {
-		fmt.Printf("Rows error: %v\n", err)
-		http.Error(w, "Error reading scores", http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(scores)
+}
+
+func handleGetReplay(w http.ResponseWriter, r *http.Request) {
+	playerName := r.URL.Query().Get("name")
+	if playerName == "" {
+		http.Error(w, "Player name is required", http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(scores); err != nil {
-		fmt.Printf("JSON encode error: %v\n", err)
-		http.Error(w, "Error encoding scores", http.StatusInternalServerError)
+	var compressedReplay string
+	err := db.QueryRow("SELECT replay FROM scores WHERE name = ?", playerName).Scan(&compressedReplay)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Replay not found", http.StatusNotFound)
+			return
+		}
+		fmt.Printf("Database error: %v\n", err)
+		http.Error(w, "Failed to get replay", http.StatusInternalServerError)
 		return
+	}
+
+	// 解压缩回放数据
+	if compressedReplay != "" {
+		decompressedReplay, err := decompressReplay(compressedReplay)
+		if err != nil {
+			fmt.Printf("Failed to decompress replay: %v\n", err)
+			http.Error(w, "Failed to process replay data", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(decompressedReplay))
+	} else {
+		w.Write([]byte("[]"))
 	}
 }
 

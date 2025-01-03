@@ -287,12 +287,36 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetScores(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(`
-		SELECT name, score, created_at 
-		FROM scores 
-		ORDER BY score DESC 
-		LIMIT 10
-	`)
+	// 获取昵称参数（可以是多个）
+	names := r.URL.Query()["name"]
+
+	var query string
+	var args []interface{}
+
+	if len(names) > 0 {
+		// 构建 IN 查询
+		placeholders := make([]string, len(names))
+		for i := range names {
+			placeholders[i] = "?"
+			args = append(args, names[i])
+		}
+		query = fmt.Sprintf(`
+			SELECT name, score, created_at 
+			FROM scores 
+			WHERE name IN (%s)
+			ORDER BY score DESC
+		`, strings.Join(placeholders, ","))
+	} else {
+		// 不传昵称时获取所有记录
+		query = `
+			SELECT name, score, created_at 
+			FROM scores 
+			ORDER BY score DESC 
+			LIMIT 10
+		`
+	}
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		fmt.Printf("Query error: %v\n", err)
 		http.Error(w, "Failed to get scores", http.StatusInternalServerError)

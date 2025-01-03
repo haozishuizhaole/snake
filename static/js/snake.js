@@ -239,24 +239,28 @@ async function showGameContainer() {
 // 添加更新个人最高分的函数
 async function updatePersonalBest() {
     try {
-        const params = {};
+        const params = {
+            name: playerName
+        };
         const signedParams = generateRequestSignature(params);
         
-        const response = await fetch('/get-scores?' + new URLSearchParams(signedParams));
+        const response = await fetch('/get-scores?' + new URLSearchParams({
+            ...signedParams,
+            name: playerName  // 添加昵称参数
+        }));
         
         if (!response.ok) {
             throw new Error('获取分数失败');
         }
         
         const scores = await response.json();
-        const playerScore = scores.find(s => s.name === playerName);
-        
         const personalBestElement = document.getElementById('personalBest');
         const personalBestScoreElement = document.getElementById('personalBestScore');
         
-        if (playerScore) {
+        if (scores.length > 0) {
+            const highestScore = scores[0].score;  // 已经按分数降序排序
             personalBestElement.style.display = 'inline';
-            personalBestScoreElement.textContent = playerScore.score;
+            personalBestScoreElement.textContent = highestScore;
         } else {
             personalBestElement.style.display = 'none';
         }
@@ -635,6 +639,7 @@ function generateRequestSignature(params) {
 // 修改获取排行榜函数
 async function updateScoreboard() {
     try {
+        // 不传昵称参数，获取所有记录
         const params = {};
         const signedParams = generateRequestSignature(params);
         

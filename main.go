@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/russross/blackfriday/v2"
 )
 
 // 添加一个用于提交分数的请求结构体
@@ -48,6 +50,54 @@ type Score struct {
 type ScoreResponse struct {
 	IsNewRecord bool `json:"isNewRecord"`
 	HighScore   int  `json:"highScore"`
+}
+
+// 添加版本记录结构
+type VersionInfo struct {
+	Version string `json:"version"`
+	Date    string `json:"date"`
+	Content string `json:"content"`
+}
+
+// 添加获取版本记录的函数
+func getVersions() ([]VersionInfo, error) {
+	versions := []VersionInfo{}
+
+	// 读取 versions 目录
+	files, err := ioutil.ReadDir("versions")
+	if err != nil {
+		return nil, err
+	}
+
+	// 遍历版本文件
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".md") {
+			content, err := ioutil.ReadFile(fmt.Sprintf("versions/%s", file.Name()))
+			if err != nil {
+				continue
+			}
+
+			// 解析版本号和日期
+			version := strings.TrimSuffix(file.Name(), ".md")
+			date := "" // 从文件内容中解析日期
+			if match := regexp.MustCompile(`\(([^)]+)\)`).FindStringSubmatch(string(content)); len(match) > 1 {
+				date = match[1]
+			}
+
+			versions = append(versions, VersionInfo{
+				Version: version,
+				Date:    date,
+				Content: string(content),
+			})
+		}
+	}
+
+	// 按版本号降序排序
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].Version > versions[j].Version
+	})
+
+	return versions, nil
 }
 
 const (
@@ -77,6 +127,14 @@ var (
 	sessions    = make(map[string]sessionInfo)
 	sessionsMap sync.RWMutex
 	dbWriteLock sync.Mutex
+
+	// 添加模板函数映射
+	templateFuncs = template.FuncMap{
+		"markdown": func(content string) template.HTML {
+			unsafe := blackfriday.Run([]byte(content))
+			return template.HTML(unsafe)
+		},
+	}
 )
 
 type sessionInfo struct {
@@ -187,13 +245,22 @@ func handleGame(w http.ResponseWriter, r *http.Request) {
 	sessions[sessionID] = sessionInfo{
 		StartTime:  time.Now(),
 		LastScore:  0,
-		LastSubmit: time.Time{}, // 使用零值时间
+		LastSubmit: time.Time{},
 		ExpiresAt:  time.Now().Add(sessionTimeout),
 	}
+
+	// 获取版本记录
+	versions, err := getVersions()
+	if err != nil {
+		versions = []VersionInfo{} // 使用空数组
+	}
+
 	sessionsMap.Unlock()
 
-	tmpl := template.Must(template.ParseFiles("templates/game.html"))
+	// 使用自定义函数创建模板
+	tmpl := template.Must(template.New("game.html").Funcs(templateFuncs).ParseFiles("templates/game.html"))
 	tmpl.Execute(w, map[string]interface{}{
+		"Versions":  versions,
 		"SessionID": sessionID,
 		"SecretKey": secretKey,
 		"AppName":   appName,

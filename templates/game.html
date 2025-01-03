@@ -54,58 +54,26 @@
                 <div class="version-header" onclick="toggleVersionHistory()">
                     <h3>
                         <span class="version-title">📝 更新记录</span>
-                        <span class="current-version">v1.1</span>
+                        {{if len .Versions}}
+                            <span class="current-version">{{(index .Versions 0).Version}}</span>
+                        {{else}}
+                            <span class="current-version">v1.0</span>
+                        {{end}}
                     </h3>
                     <span class="toggle-icon">▼</span>
                 </div>
                 <div class="version-content" style="display: none;">
-                    <h4>v1.1 (2024-03-26)</h4>
+                    {{range .Versions}}
                     <div class="version-section">
-                        <h5>✨ 新功能</h5>
-                        <div class="update-items">
-                            <div class="update-item">🎮 经典贪吃蛇游戏玩法</div>
-                            <div class="update-item">🏆 实时排行榜系统</div>
-                            <div class="update-item">🎯 游戏准备倒计时</div>
-                            <div class="update-item">🎉 破纪录特效与庆祝</div>
-                            <div class="update-item">🤖 AI 自动演示功能</div>
-                            <div class="update-item">🎬 游戏回放系统</div>
-                            <div class="update-item">📊 个人最高分记录</div>
-                            <div class="update-item">🔄 支持更换昵称</div>
+                        <div class="version-header-small">
+                            <span class="version-number">{{.Version}}</span>
+                            <span class="version-date">{{.Date}}</span>
+                        </div>
+                        <div class="version-content markdown-content">
+                            {{markdown .Content}}
                         </div>
                     </div>
-                    <div class="version-section">
-                        <h5>🎨 体验优化</h5>
-                        <div class="update-items">
-                            <div class="update-item">⌨️ 完整键盘快捷操作</div>
-                            <div class="update-item">🍊 食物使用橙子表情</div>
-                            <div class="update-item">💫 按钮悬停提示</div>
-                            <div class="update-item">📱 响应式界面布局</div>
-                            <div class="update-item">🌈 结算界面动画效果</div>
-                            <div class="update-item">💭 随机鼓励与庆祝语</div>
-                            <div class="update-item">🎯 游戏操作指引</div>
-                        </div>
-                    </div>
-                    <div class="version-section">
-                        <h5>🐛️ 系统功能</h5>
-                        <div class="update-items">
-                            <div class="update-item">🔒 完整的防作弊系统</div>
-                            <div class="update-item">💾 游戏数据持久化</div>
-                            <div class="update-item">🔄 会话管理机制</div>
-                            <div class="update-item">🚀 性能优化</div>
-                            <div class="update-item">🛡️ 安全签名验证</div>
-                            <div class="update-item">📦 数据压缩存储</div>
-                        </div>
-                    </div>
-                    <div class="version-section">
-                        <h5>🐛 问题修复</h5>
-                        <div class="update-items">
-                            <div class="update-item">🔧 修复穿墙问题</div>
-                            <div class="update-item">⚡️ 优化移动响应</div>
-                            <div class="update-item">🎯 改进碰撞检测</div>
-                            <div class="update-item">🔄 修复回放异常</div>
-                            <div class="update-item">📱 修复布局问题</div>
-                        </div>
-                    </div>
+                    {{end}}
                 </div>
             </div>
         </div>

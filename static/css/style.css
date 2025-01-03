@@ -280,6 +280,34 @@ button:hover::after {
 .version-content {
     overflow: hidden;
     transition: max-height 0.3s ease-out;
+    font-size: 13px;
+    color: #666;
+}
+
+.version-content h1 {
+    display: none;
+}
+
+.version-content h2 {
+    font-size: 15px;
+    color: #333;
+    margin: 15px 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.version-content ul {
+    margin: 5px 0;
+    padding-left: 20px;
+}
+
+.version-content li {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+.markdown-content {
+    padding: 0 10px;
 }
 
 .version-info h3 {
@@ -977,4 +1005,60 @@ button:hover::after {
     to {
         box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
     }
+}
+
+/* 添加版本号显示的样式 */
+.version-header-small {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.version-number {
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 15px;
+    padding: 2px 8px;
+    background-color: rgba(74, 175, 80, 0.1);
+    border-radius: 12px;
+}
+
+.version-date {
+    color: #666;
+    font-size: 13px;
+}
+
+/* 调整内容区域的样式 */
+.version-content {
+    font-size: 13px;
+    color: #666;
+}
+
+.version-content h1 {
+    display: none;
+}
+
+.version-content h2 {
+    font-size: 15px;
+    color: #333;
+    margin: 15px 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.version-content ul {
+    margin: 5px 0;
+    padding-left: 20px;
+}
+
+.version-content li {
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+.markdown-content {
+    padding: 0 10px;
 } 

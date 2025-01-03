@@ -134,11 +134,22 @@ function changeName() {
     fetch('/')
         .then(response => response.text())
         .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            sessionId = doc.getElementById('sessionId').value;
+            // 使用正则表达式提取 sessionId
+            const match = html.match(/const sessionId = "([^"]+)"/);
+            if (match && match[1]) {
+                sessionId = match[1];
+            } else {
+                console.error('无法从响应中提取 sessionId');
+                // 如果无法获取新的 sessionId，则刷新页面
+                window.location.reload();
+                return;
+            }
         })
-        .catch(error => console.error('获取新 sessionId 失败:', error));
+        .catch(error => {
+            console.error('获取新 sessionId 失败:', error);
+            // 出错时刷新页面
+            window.location.reload();
+        });
     
     // 重置欢迎界面
     const welcomeScreen = document.getElementById('welcomeScreen');

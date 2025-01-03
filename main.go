@@ -58,12 +58,18 @@ const (
 	// 会话相关的常量
 	sessionTimeout  = 30 * time.Minute // 会话超时时间
 	cleanupInterval = 5 * time.Minute  // 清理间隔
+
+	// 数据库连接池配置
+	maxOpenConns    = 25              // 最大打开连接数
+	maxIdleConns    = 5               // 最大空闲连接数
+	connMaxLifetime = 5 * time.Minute // 连接最大生命周期
 )
 
 var (
 	db          *sql.DB
 	sessions    = make(map[string]sessionInfo)
 	sessionsMap sync.RWMutex
+	dbWriteLock sync.Mutex
 )
 
 type sessionInfo struct {
@@ -80,9 +86,20 @@ func initDB() error {
 		return fmt.Errorf("failed to open database: %v", err)
 	}
 
-	// 设置数据库连接参数
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// 配置连接池
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxLifetime(connMaxLifetime)
+
+	// 启用 WAL 模式以提高并发性能
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return fmt.Errorf("failed to enable WAL mode: %v", err)
+	}
+
+	// 启用外键约束
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		return fmt.Errorf("failed to enable foreign keys: %v", err)
+	}
 
 	// 创建新表（不删除旧表）
 	_, err = db.Exec(`
@@ -161,7 +178,7 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 使用 ScoreSubmission 来解析请求
+	// 解析请求
 	var submission ScoreSubmission
 	if err := json.NewDecoder(r.Body).Decode(&submission); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -192,7 +209,7 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 添加验证
+	// 验证分数提交
 	if !validateScoreHash(submission) {
 		http.Error(w, "Invalid score submission", http.StatusBadRequest)
 		return
@@ -205,15 +222,6 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 先查询当前玩家的历史最高分
-	var highScore int
-	err := db.QueryRow(`SELECT COALESCE(MAX(score), 0) FROM scores WHERE name = ?`, submission.Name).Scan(&highScore)
-	if err != nil && err != sql.ErrNoRows {
-		fmt.Printf("Database error when querying high score: %v\n", err)
-		http.Error(w, "Failed to check high score", http.StatusInternalServerError)
-		return
-	}
-
 	// 压缩回放数据
 	compressedReplay, err := compressReplay(submission.Replay)
 	if err != nil {
@@ -222,17 +230,39 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 判断是否破纪录（与玩家自己的历史最高分比较）
+	// 使用互斥锁保护数据库写操作
+	dbWriteLock.Lock()
+	defer dbWriteLock.Unlock()
+
+	// 开始事务
+	tx, err := db.Begin()
+	if err != nil {
+		fmt.Printf("Failed to begin transaction: %v\n", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback() // 在出错时回滚事务
+
+	// 查询当前玩家的历史最高分
+	var highScore int
+	err = tx.QueryRow(`SELECT COALESCE(MAX(score), 0) FROM scores WHERE name = ?`, submission.Name).Scan(&highScore)
+	if err != nil && err != sql.ErrNoRows {
+		fmt.Printf("Database error when querying high score: %v\n", err)
+		http.Error(w, "Failed to check high score", http.StatusInternalServerError)
+		return
+	}
+
+	// 判断是否破纪录
 	isNewRecord := submission.Score > highScore
 
 	// 更新数据库
-	_, err = db.Exec(`
+	_, err = tx.Exec(`
 		INSERT INTO scores (name, score, replay, created_at) 
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(name) DO UPDATE SET 
-			score = CASE WHEN excluded.score > score THEN excluded.score ELSE score END,
-			replay = CASE WHEN excluded.score > score THEN excluded.replay ELSE replay END,
-			created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
+			ON CONFLICT(name) DO UPDATE SET 
+				score = CASE WHEN excluded.score > score THEN excluded.score ELSE score END,
+				replay = CASE WHEN excluded.score > score THEN excluded.replay ELSE replay END,
+				created_at = CASE WHEN excluded.score > score THEN CURRENT_TIMESTAMP ELSE created_at END
 	`, submission.Name, submission.Score, compressedReplay)
 
 	if err != nil {
@@ -241,7 +271,14 @@ func handleSubmitScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 返回是否破纪录的信息
+	// 提交事务
+	if err := tx.Commit(); err != nil {
+		fmt.Printf("Failed to commit transaction: %v\n", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// 返回响应
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ScoreResponse{
 		IsNewRecord: isNewRecord,

@@ -179,6 +179,9 @@ function changeName() {
     
     // 重置游戏
     resetGame();
+    
+    // 隐藏个人最高分
+    document.getElementById('personalBest').style.display = 'none';
 }
 
 // 修改页面加载逻辑
@@ -212,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // 修改显示游戏容器的函数
-function showGameContainer() {
+async function showGameContainer() {
     // 隐藏欢迎界面
     const welcomeScreen = document.getElementById('welcomeScreen');
     welcomeScreen.style.display = 'none';
@@ -223,11 +226,44 @@ function showGameContainer() {
     document.getElementById('startScreen').style.display = 'block';
     document.getElementById('currentPlayerName').textContent = playerName;
     
+    // 获取并显示个人最高分
+    await updatePersonalBest();
+    
     // 重置游戏状态
     resetGame();
     
     // 设置 5 秒后启动 AI 游戏
     startAICountdown();
+}
+
+// 添加更新个人最高分的函数
+async function updatePersonalBest() {
+    try {
+        const params = {};
+        const signedParams = generateRequestSignature(params);
+        
+        const response = await fetch('/get-scores?' + new URLSearchParams(signedParams));
+        
+        if (!response.ok) {
+            throw new Error('获取分数失败');
+        }
+        
+        const scores = await response.json();
+        const playerScore = scores.find(s => s.name === playerName);
+        
+        const personalBestElement = document.getElementById('personalBest');
+        const personalBestScoreElement = document.getElementById('personalBestScore');
+        
+        if (playerScore) {
+            personalBestElement.style.display = 'inline';
+            personalBestScoreElement.textContent = playerScore.score;
+        } else {
+            personalBestElement.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('获取个人最高分失败:', error);
+        document.getElementById('personalBest').style.display = 'none';
+    }
 }
 
 // 添加 AI 倒计时函数
@@ -951,8 +987,11 @@ async function submitScore() {
             encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
         }
 
-        // 更新排行榜
-        await updateScoreboard();
+        // 更新排行榜和个人最高分
+        await Promise.all([
+            updateScoreboard(),
+            updatePersonalBest()
+        ]);
         
     } catch (error) {
         console.error('提交分数失败:', error);

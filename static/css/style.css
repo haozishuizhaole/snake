@@ -771,7 +771,18 @@ button:hover::after {
 .current-player {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+}
+
+.separator {
+    color: #999;
+    margin: 0 5px;
+}
+
+#personalBest {
+    color: #4CAF50;
+    font-size: 14px;
+    animation: fadeIn 0.3s ease-in;
 }
 
 .replay-icon {

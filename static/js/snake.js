@@ -20,6 +20,7 @@ let countdownTimer = null;
 let personalBestScore = 0;
 let isAIPlaying = false;
 let aiGameLoop;
+let aiStartTimeout = null;
 
 document.addEventListener('keydown', changeDirection);
 updateScoreboard();
@@ -154,8 +155,23 @@ function showGameContainer() {
     // 重置游戏状态
     resetGame();
     
-    // 启动 AI 自动游戏
-    startAIGame();
+    // 设置 5 秒后启动 AI 游戏
+    startAICountdown();
+}
+
+// 添加 AI 倒计时函数
+function startAICountdown() {
+    // 清除可能存在的旧定时器
+    if (aiStartTimeout) {
+        clearTimeout(aiStartTimeout);
+    }
+    
+    // 5 秒后启动 AI 游戏
+    aiStartTimeout = setTimeout(() => {
+        if (!gameStarted) {  // 只有在游戏未开始时才启动 AI
+            startAIGame();
+        }
+    }, 5000);
 }
 
 // 隐藏游戏结束对话框
@@ -163,6 +179,9 @@ function hideGameOver() {
     document.getElementById('gameOver').style.display = 'none';
     document.getElementById('startScreen').style.display = 'block';
     confetti.stop();
+    
+    // 重新开始 AI 倒计时
+    startAICountdown();
 }
 
 function startGame() {
@@ -178,6 +197,12 @@ function startGame() {
     if (timeSinceLastGame < minInterval) {
         alert(`请等待 ${Math.ceil(minInterval - timeSinceLastGame)} 秒后再开始新游戏`);
         return;
+    }
+    
+    // 清除 AI 倒计时
+    if (aiStartTimeout) {
+        clearTimeout(aiStartTimeout);
+        aiStartTimeout = null;
     }
     
     // 停止 AI 游戏
@@ -644,30 +669,19 @@ function startAIGame() {
 function updateAIGame() {
     if (!isAIPlaying) return;
     
-    // AI 决策：计算下一步移动方向
     const head = snake[0];
     const foodDir = {
         x: food.x - head.x,
         y: food.y - head.y
     };
     
-    // 优先选择安全的移动方向
+    // 获取所有可能的移动方向
     const possibleMoves = getPossibleMoves();
     if (possibleMoves.length === 0) {
         handleAIGameOver();
         return;
     }
-    
-    // 检查是否会撞墙
-    const newHead = {
-        x: head.x + dx,
-        y: head.y + dy
-    };
-    if (newHead.x < 0 || newHead.x >= tileCount || newHead.y < 0 || newHead.y >= tileCount) {
-        handleAIGameOver();
-        return;
-    }
-    
+
     // 选择最佳移动方向
     const bestMove = chooseBestMove(possibleMoves, foodDir);
     dx = bestMove.x;
@@ -677,7 +691,6 @@ function updateAIGame() {
     const newHeadPos = {x: head.x + dx, y: head.y + dy};
     snake.unshift(newHeadPos);
     
-    // 检查是否吃到食物
     if (newHeadPos.x === food.x && newHeadPos.y === food.y) {
         generateFood();
     } else {
@@ -687,16 +700,17 @@ function updateAIGame() {
     draw();
 }
 
-// 获取可能的移动方向
+// 改进获取可能移动方向的函数
 function getPossibleMoves() {
     const head = snake[0];
     const moves = [
-        {x: 1, y: 0},
-        {x: -1, y: 0},
-        {x: 0, y: 1},
-        {x: 0, y: -1}
+        {x: 1, y: 0},   // 右
+        {x: -1, y: 0},  // 左
+        {x: 0, y: 1},   // 下
+        {x: 0, y: -1}   // 上
     ];
     
+    // 过滤掉不安全的移动
     return moves.filter(move => {
         const newX = head.x + move.x;
         const newY = head.y + move.y;
@@ -706,23 +720,93 @@ function getPossibleMoves() {
             return false;
         }
         
-        // 检查是否会撞到自己
-        return !snake.some(segment => segment.x === newX && segment.y === newY);
+        // 检查是否会撞到自己（除了尾巴）
+        const willEatFood = newX === food.x && newY === food.y;
+        const snakeWithoutTail = willEatFood ? snake : snake.slice(0, -1);
+        return !snakeWithoutTail.some(segment => segment.x === newX && segment.y === newY);
     });
 }
 
-// 选择最佳移动方向
+// 改进选择最佳移动方向的函数
 function chooseBestMove(possibleMoves, foodDir) {
-    // 计算每个移动方向到食物的距离
-    const distances = possibleMoves.map(move => {
-        const dx = Math.abs(foodDir.x - move.x);
-        const dy = Math.abs(foodDir.y - move.y);
-        return {move, distance: dx + dy};
+    // 为每个可能的移动计算分数
+    const scoredMoves = possibleMoves.map(move => {
+        const newHead = {
+            x: snake[0].x + move.x,
+            y: snake[0].y + move.y
+        };
+        
+        let score = 0;
+        
+        // 1. 距离食物的距离（负分，距离越近分数越高）
+        const distanceToFood = Math.abs(food.x - newHead.x) + Math.abs(food.y - newHead.y);
+        score -= distanceToFood * 2;
+        
+        // 2. 检查移动后是否有足够的空间（空间越大分数越高）
+        const spaceScore = calculateFreeSpace(newHead);
+        score += spaceScore * 3;
+        
+        // 3. 避免靠近自己的身体（除了尾巴）
+        snake.slice(0, -1).forEach(segment => {
+            const distToSegment = Math.abs(segment.x - newHead.x) + Math.abs(segment.y - newHead.y);
+            if (distToSegment < 3) {
+                score -= (3 - distToSegment) * 5;
+            }
+        });
+        
+        // 4. 优先选择沿着当前方向移动
+        if ((dx === move.x && dy === move.y)) {
+            score += 2;
+        }
+        
+        // 5. 如果这个移动可以直接吃到食物，给予额外分数
+        if (newHead.x === food.x && newHead.y === food.y) {
+            score += 10;
+        }
+        
+        return { move, score };
     });
     
-    // 选择距离最短的移动方向
-    distances.sort((a, b) => a.distance - b.distance);
-    return distances[0].move;
+    // 选择得分最高的移动
+    scoredMoves.sort((a, b) => b.score - a.score);
+    return scoredMoves[0].move;
+}
+
+// 计算某个位置的可用空间
+function calculateFreeSpace(pos) {
+    const visited = new Set();
+    const queue = [pos];
+    
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const key = `${current.x},${current.y}`;
+        
+        if (visited.has(key)) continue;
+        visited.add(key);
+        
+        // 检查四个方向
+        const directions = [
+            {x: 1, y: 0}, {x: -1, y: 0},
+            {x: 0, y: 1}, {x: 0, y: -1}
+        ];
+        
+        for (const dir of directions) {
+            const newX = current.x + dir.x;
+            const newY = current.y + dir.y;
+            
+            // 检查是否在边界内且不是蛇的身体
+            if (newX >= 0 && newX < tileCount && 
+                newY >= 0 && newY < tileCount && 
+                !snake.some(s => s.x === newX && s.y === newY)) {
+                queue.push({x: newX, y: newY});
+            }
+        }
+        
+        // 限制搜索空间，避免计算过久
+        if (visited.size > 50) break;
+    }
+    
+    return visited.size;
 }
 
 // 添加 AI 游戏结束处理函数
@@ -748,6 +832,10 @@ function stopAIGame() {
     if (aiGameLoop) {
         clearInterval(aiGameLoop);
         aiGameLoop = null;
+    }
+    if (aiStartTimeout) {
+        clearTimeout(aiStartTimeout);
+        aiStartTimeout = null;
     }
     resetGame();
 } 

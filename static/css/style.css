@@ -635,25 +635,20 @@ button:hover::after {
 
 /* 游戏说明样式 */
 .game-instructions {
-    width: 100%;
-    padding: 20px;
     background-color: #fff;
+    padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    box-sizing: border-box;
-    margin-left: auto;
-    margin-right: auto;
+    margin-bottom: 20px;
 }
 
 .game-instructions h3 {
-    font-size: 16px;
     margin: 0 0 15px 0;
-    color: #24292e;
+    color: #333;
+    font-size: 18px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e1e4e8;
 }
 
 .instructions-content ul {
@@ -663,52 +658,24 @@ button:hover::after {
 }
 
 .instructions-content li {
-    color: #555;
+    padding: 8px 0;
+    color: #666;
+    font-size: 14px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
-    transition: all 0.3s ease;
-    font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #eee;
-    white-space: normal;
-    line-height: 1.5;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
 }
 
 .instructions-content li:last-child {
-    margin-bottom: 0;
     border-bottom: none;
 }
 
+/* 添加悬停效果 */
 .instructions-content li:hover {
-    background-color: #f6f8fa;
-}
-
-/* 调整表情图标大小 */
-.instructions-content li::before,
-.update-item::before {
-    font-size: 14px;
-}
-
-.instructions-content li span,
-.update-item span {
-    color: #586069;
-    min-width: 20px;
-    text-align: center;
-}
-
-/* 调整游戏说明的内容样式 */
-.game-instructions .instructions-content {
-    max-height: none;  /* 移除最大高度限制 */
-}
-
-/* 确保排行榜有合适的高度 */
-.scoreboard {
-    flex: 1;
-    min-height: 300px;
+    background-color: rgba(74, 175, 80, 0.05);
+    transform: translateX(5px);
+    transition: all 0.3s ease;
 }
 
 .right-sidebar {

@@ -148,6 +148,10 @@ body {
     border-radius: 5px;
     position: relative;
     z-index: 2;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 input[type="text"] {
@@ -868,4 +872,131 @@ button:hover::after {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* 添加加载动画样式 */
+.score-loading {
+    text-align: center;
+    padding: 20px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #4CAF50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 优化结算结果显示 */
+#scoreResult {
+    text-align: center;
+}
+
+#scoreResult h2 {
+    margin-bottom: 20px;
+}
+
+#newRecord {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: rgba(255, 215, 0, 0.1);
+    border-radius: 8px;
+}
+
+/* 添加鼓励语样式 */
+.encouragement {
+    margin: 15px 0;
+    padding: 15px;
+    background-color: rgba(74, 175, 80, 0.1);
+    border-radius: 8px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.encouragement h3 {
+    color: #4CAF50;
+    margin: 0 0 10px 0;
+    font-size: 18px;
+}
+
+.encouragement-text {
+    color: #666;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 添加庆祝语样式 */
+.celebration-text {
+    font-size: 16px;
+    color: #4CAF50;
+    margin: 15px 0;
+    animation: celebrateIn 0.6s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.celebration-emoji {
+    font-size: 24px;
+    animation: bounce 1s infinite;
+    display: inline-block;
+}
+
+@keyframes celebrateIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* 优化新纪录显示 */
+#newRecord {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.2));
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    animation: glowEffect 2s infinite alternate;
+}
+
+@keyframes glowEffect {
+    from {
+        box-shadow: 0 0 5px rgba(255, 215, 0, 0.2);
+    }
+    to {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+    }
 } 

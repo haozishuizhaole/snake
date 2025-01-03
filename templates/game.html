@@ -110,16 +110,31 @@
     </div>
     <div id="gameOver" class="modal">
         <div class="modal-content">
-            <h2>游戏结束</h2>
-            <div id="newRecord" style="display: none;">
-                <h3 style="color: #FFD700;">🎉 新纪录！ 🎉</h3>
-                <p style="color: #4CAF50;">恭喜你打破了个人最高分！</p>
+            <!-- 添加加载状态 -->
+            <div id="scoreLoading" class="score-loading">
+                <h2>正在结算，请勿离开</h2>
+                <div class="loading-spinner"></div>
             </div>
-            <p>你的分数: <span id="finalScore">0</span></p>
-            <p>玩家: <span id="playerNameDisplay"></span></p>
-            <button onclick="hideGameOver()" title="按空格键继续">继续游戏 [空格]</button>
+            
+            <!-- 结算结果（初始隐藏） -->
+            <div id="scoreResult" style="display: none;">
+                <h2>游戏结束</h2>
+                <div id="newRecord" style="display: none;">
+                    <h3 style="color: #FFD700;">🎉 新纪录！ 🎉</h3>
+                    <p style="color: #4CAF50;">恭喜你打破了个人最高分！</p>
+                </div>
+                <!-- 添加常规结算信息 -->
+                <div id="normalScore" style="display: none;">
+                    <div class="encouragement">
+                        <h3>💪 你已经很棒啦！</h3>
+                        <p class="encouragement-text"></p>
+                    </div>
+                </div>
+                <p>你的分数: <span id="finalScore">0</span></p>
+                <p>玩家: <span id="playerNameDisplay"></span></p>
+                <button onclick="hideGameOver()" title="按空格键继续">继续游戏 [空格]</button>
+            </div>
         </div>
-        <canvas id="confettiCanvas"></canvas>
     </div>
     <script>
         // 将会话ID和密钥传递给前端

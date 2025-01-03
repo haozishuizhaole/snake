@@ -26,6 +26,44 @@ let isReplaying = false;
 let lastDirectionChange = 0;
 let replayTimer = null;
 
+// 添加鼓励语数组
+const encouragements = [
+    { text: "再接再厉，超越自我！", emoji: "💪" },
+    { text: "加油！下一把一定能创造新纪录！", emoji: "🚀" },
+    { text: "继续努力，你离最高分越来越近了！", emoji: "⭐" },
+    { text: "不错的表现，继续保持这个势头！", emoji: "🌟" },
+    { text: "相信自己，你可以做得更好！", emoji: "✨" },
+    { text: "胜败乃兵家常事，重要的是永不言弃！", emoji: "🔥" },
+    { text: "每一次尝试都是进步的机会！", emoji: "📈" },
+    { text: "失败是成功之母，继续加油！", emoji: "💫" },
+    { text: "看好你哦，下一把一定更精彩！", emoji: "🎯" },
+    { text: "这个分数已经很厉害了！", emoji: "👏" }
+];
+
+// 添加庆祝语数组
+const celebrations = [
+    { text: "太厉害了！你创造了新的传奇！", emoji: "👑" },
+    { text: "破纪录啦！这就是实力的象征！", emoji: "🏆" },
+    { text: "哇！这个分数简直是神级表现！", emoji: "✨" },
+    { text: "新纪录诞生的瞬间，就是传奇开始的时刻！", emoji: "🌟" },
+    { text: "这波操作，简直完美！", emoji: "💫" },
+    { text: "这个分数，已经超越了自我！", emoji: "🚀" },
+    { text: "天啊！这真是令人惊叹的表现！", emoji: "🎯" },
+    { text: "这就是王者的实力！无人能及！", emoji: "👊" },
+    { text: "新纪录！你就是最闪亮的星！", emoji: "⭐" },
+    { text: "这个分数，足以载入史册！", emoji: "📚" },
+    { text: "登峰造极！这就是巅峰的感觉！", emoji: "🏔️" },
+    { text: "破纪录的瞬间，就是王者的诞生！", emoji: "👑" },
+    { text: "这个分数，简直就是艺术品！", emoji: "🎨" },
+    { text: "无与伦比的表现！你就是最强的！", emoji: "💪" },
+    { text: "这一刻，你就是贪吃蛇界的传奇！", emoji: "🐍" },
+    { text: "新纪录！这就是冠军的实力！", emoji: "🏅" },
+    { text: "太棒了！你创造了新的可能！", emoji: "🌈" },
+    { text: "这个分数，将永远被铭记！", emoji: "💎" },
+    { text: "破纪录的感觉真好！继续保持！", emoji: "🔥" },
+    { text: "这就是实力的证明！无人能敌！", emoji: "🌠" }
+];
+
 document.addEventListener('keydown', changeDirection);
 // 初始化游戏状态
 resetGame();
@@ -490,6 +528,15 @@ function gameOver() {
     gameStarted = false;
     lastGameEndTime = Date.now();
 
+    // 显示游戏结束弹窗，但只显示加载状态
+    const gameOverDiv = document.getElementById('gameOver');
+    const scoreLoading = document.getElementById('scoreLoading');
+    const scoreResult = document.getElementById('scoreResult');
+    
+    gameOverDiv.style.display = 'block';
+    scoreLoading.style.display = 'block';
+    scoreResult.style.display = 'none';
+
     // 提交分数并处理结果
     submitScore();
 }
@@ -860,20 +907,37 @@ async function submitScore() {
         // 处理响应
         const result = await response.json();
         
-        // 显示游戏结束界面
-        const gameOverDiv = document.getElementById('gameOver');
-        gameOverDiv.style.display = 'block';
+        // 隐藏加载状态，显示结算结果
+        document.getElementById('scoreLoading').style.display = 'none';
+        document.getElementById('scoreResult').style.display = 'block';
         
         // 更新分数和玩家名称显示
         document.getElementById('finalScore').textContent = score;
         document.getElementById('playerNameDisplay').textContent = playerName;
         
-        // 根据是否破纪录显示特效
+        // 根据是否破纪录显示不同内容
         if (result.isNewRecord) {
             startConfetti();
             document.getElementById('newRecord').style.display = 'block';
+            document.getElementById('normalScore').style.display = 'none';
+            
+            // 随机选择一条庆祝语
+            const celebration = celebrations[Math.floor(Math.random() * celebrations.length)];
+            const recordText = document.querySelector('#newRecord p');
+            recordText.innerHTML = `
+                <div class="celebration-text">
+                    <span class="celebration-emoji">${celebration.emoji}</span>
+                    ${celebration.text}
+                </div>
+            `;
         } else {
             document.getElementById('newRecord').style.display = 'none';
+            document.getElementById('normalScore').style.display = 'block';
+            
+            // 随机选择一条鼓励语
+            const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+            const encouragementText = document.querySelector('.encouragement-text');
+            encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
         }
 
         // 更新排行榜
@@ -883,12 +947,12 @@ async function submitScore() {
         console.error('提交分数失败:', error);
         alert('提交分数失败: ' + error.message);
         
-        // 出错时也显示游戏结束界面，但不显示破纪录提示
-        const gameOverDiv = document.getElementById('gameOver');
-        gameOverDiv.style.display = 'block';
-        document.getElementById('finalScore').textContent = score;
-        document.getElementById('playerNameDisplay').textContent = playerName;
+        // 出错时也显示鼓励语
         document.getElementById('newRecord').style.display = 'none';
+        document.getElementById('normalScore').style.display = 'block';
+        const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+        const encouragementText = document.querySelector('.encouragement-text');
+        encouragementText.innerHTML = `${encouragement.emoji} ${encouragement.text}`;
     }
 }
 

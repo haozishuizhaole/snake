@@ -782,9 +782,33 @@ function changeDirection(event) {
     lastDirectionChange = now;
 }
 
+// 修改生成食物的函数
 function generateFood() {
-    food.x = Math.floor(Math.random() * tileCount);
-    food.y = Math.floor(Math.random() * tileCount);
+    // 创建一个包含所有可用位置的数组
+    const availablePositions = [];
+    
+    // 遍历整个游戏区域
+    for (let x = 0; x < tileCount; x++) {
+        for (let y = 0; y < tileCount; y++) {
+            // 检查该位置是否被蛇占用
+            if (!snake.some(segment => segment.x === x && segment.y === y)) {
+                availablePositions.push({x, y});
+            }
+        }
+    }
+    
+    // 如果没有可用位置，返回（虽然这种情况几乎不可能发生）
+    if (availablePositions.length === 0) {
+        return;
+    }
+    
+    // 从可用位置中随机选择一个
+    const randomIndex = Math.floor(Math.random() * availablePositions.length);
+    const newPosition = availablePositions[randomIndex];
+    
+    // 更新食物位置
+    food.x = newPosition.x;
+    food.y = newPosition.y;
 }
 
 function checkCollision(head) {

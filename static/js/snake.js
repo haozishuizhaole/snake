@@ -1096,9 +1096,9 @@ async function updateScoreboard() {
                         <span class="rank">${prefix}</span>
                         <div class="player-info">
                             <span class="player-name">${score.name || '未知玩家'}</span>
-                            <span class="player-play-count">游戏次数: ${score.playCount || 0}</span>
+                            <span class="player-play-count">游戏次数: ${score.playCount || 0} 🎮</span>
                         </div>
-                        <span class="player-score">${score.score || 0}</span>
+                        <span class="player-score">${score.score || 0} 🍊</span>
                         <span class="replay-icon" 
                             title="点击观看回放" 
                             onclick="handleReplayClick(this, '${score.name}')"

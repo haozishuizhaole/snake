@@ -1,0 +1,70 @@
+name: Build and Package Snake Game
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送 v 开头的标签时触发
+
+jobs:
+  build:
+    name: Build and Package
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+          
+      - name: Build backend
+        run: |
+          go build -o snake main.go
+          
+      - name: Create release package
+        run: |
+          mkdir release
+          cp snake release/
+          cp -r static release/
+          cp -r templates release/
+          cp -r versions release/
+          
+          # 创建版本信息文件
+          echo "Snake Game $(git describe --tags)" > release/VERSION
+          echo "Build time: $(date)" >> release/VERSION
+          
+          # 创建启动说明
+          cat > release/README.md << 'EOF'
+          # Snake Game
+          
+          ## 启动说明
+          1. 确保所有文件在同一目录下
+          2. 运行 ./snake 启动服务
+          3. 访问 http://localhost:8080 开始游戏
+          
+          ## 目录结构
+          - snake: 游戏服务程序
+          - static/: 静态资源文件
+          - templates/: 页面模板
+          - versions/: 版本记录
+          EOF
+          
+          cd release
+          tar czf ../snake-game.tar.gz *
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: snake-game
+          path: snake-game.tar.gz
+          
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: snake-game.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

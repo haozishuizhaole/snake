@@ -1,0 +1,42 @@
+# 编译生成的二进制文件
+snake
+snake.exe
+
+# 数据库文件
+*.db
+*.db-journal
+snake.db
+snake.db-*
+
+# IDE 和编辑器文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go 编译和依赖目录
+/bin/
+/pkg/
+/vendor/
+
+# Go 构建和测试文件
+*.test
+*.out
+/coverage.txt
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+logs/
+
+# 环境变量文件
+.env
+.env.local
+
+# 临时文件
+tmp/
+temp/ 

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -335,6 +336,11 @@ func handleGetStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// 添加命令行参数解析
+	var port int
+	flag.IntVar(&port, "port", 8080, "服务监听端口")
+	flag.Parse()
+
 	// 初始化数据库
 	if err := initDB(); err != nil {
 		fmt.Printf("Failed to initialize database: %v\n", err)
@@ -359,7 +365,7 @@ func main() {
 	r.HandleFunc("/get-replay", validateRequest(handleGetReplay))
 	r.HandleFunc("/get-stats", validateRequest(handleGetStats))
 
-	port := 8080
+	// 使用命令行指定的端口
 	fmt.Printf("Server starting at http://localhost:%d\n", port)
 
 	// 启动会话清理协程

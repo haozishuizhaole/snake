@@ -14,12 +14,6 @@ error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 检查是否安装了 Go
-if ! command -v go &> /dev/null; then
-    error "Go is not installed. Please install Go first."
-    exit 1
-fi
-
 # 创建构建目录
 BUILD_DIR="build"
 info "Creating build directory..."

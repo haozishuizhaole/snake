@@ -54,6 +54,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           release_name: ${{ env.release_version }}
-          body: $(cat decoded_content.txt)
+          body: |
+            $(cat decoded_content.txt)
           draft: false
           prerelease: true

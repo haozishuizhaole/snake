@@ -19,36 +19,33 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Build
-        run: sh build.sh
+#      - name: Build
+#        run: sh build.sh
 
-      - name: Get version from tag
-        id: get_version
+      - name: Gather Release Information
+        id: release_info
         run: |
           # 从 tag (例如 v1.0.0-dev) 提取版本号 (v1.0.0)
           VERSION=$(echo ${GITHUB_REF#refs/tags/} | sed 's/-dev.*//')
-
           # 检查对应的版本文件是否存在
           if [ ! -f "versions/${VERSION}.md" ]; then
-            echo "Error: Version file versions/${VERSION}.md not found"
-            exit 1
+           echo "Error: Version file versions/${VERSION}.md not found"
+           exit 1
           fi
-
-          # 导出版本号
-          echo "release_version=$VERSION" >> $GITHUB_ENV
-
-          # 读取版本文件内容
-          CONTENT=$(cat "versions/${VERSION}.md")
-          echo "release_content=$CONTENT" >> $GITHUB_ENV
-
-      - name: Create Release
-        uses: actions/create-release@v1
-        id: create_release
+          
+          # 导出
+          echo "release_body_file=versions/${VERSION}.md" >> $GITHUB_OUTPUT
+          echo "release_version=$(TZ=Asia/Shanghai date +'v%Y%m%d%H%M')" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ env.release_version }}
-          body: ${{ env.release_content }}
+          name: ${{ steps.release_info.outputs.release_version }}
+          tag: ${{ github.ref }}
+          bodyFile: ${{steps.release_info.outputs.release_body_file}}
           draft: false
           prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}

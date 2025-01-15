@@ -26,25 +26,25 @@ jobs:
         id: get_version
         run: |
           # 从 tag (例如 v1.0.0-dev) 提取版本号 (v1.0.0)
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/-dev.*//')
-          
+          VERSION=$(echo ${GITHUB_REF#refs/tags/} | sed 's/-dev.*//')
+
           # 检查对应的版本文件是否存在
           if [ ! -f "versions/${VERSION}.md" ]; then
             echo "Error: Version file versions/${VERSION}.md not found"
             exit 1
           fi
-          
+
+          # 导出版本号
           echo "release_version=$VERSION" >> $GITHUB_ENV
-          
+
           # 读取版本文件内容，编码内容为 Base64
-          CONTENT=$(base64 -w 0 "versions/${VERSION}.md")
-          echo "release_content=$CONTENT" >> $GITHUB_ENV
+          base64 "versions/${VERSION}.md" | tr -d '\n' > encoded_content.txt
+          echo "release_content=$(cat encoded_content.txt)" >> $GITHUB_ENV
 
       - name: Decode Release Content
         run: |
-          # Decode the Base64 content
+          # 从文件解码 Base64 内容
           echo ${{ env.release_content }} | base64 -d > decoded_content.txt
-        shell: bash
 
       - name: Create Release
         uses: actions/create-release@v1

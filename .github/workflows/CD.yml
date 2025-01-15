@@ -36,9 +36,15 @@ jobs:
           
           echo "release_version=$VERSION" >> $GITHUB_ENV
           
-          # 读取版本文件内容
-          CONTENT=$(cat "versions/${VERSION}.md")
+          # 读取版本文件内容，编码内容为 Base64
+          CONTENT=$(base64 -w 0 "versions/${VERSION}.md")
           echo "release_content=$CONTENT" >> $GITHUB_ENV
+
+      - name: Decode Release Content
+        run: |
+          # Decode the Base64 content
+          echo ${{ env.release_content }} | base64 -d > decoded_content.txt
+        shell: bash
 
       - name: Create Release
         uses: actions/create-release@v1
@@ -48,6 +54,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           release_name: ${{ env.release_version }}
-          body: ${{ env.release_content }}
+          body: $(cat decoded_content.txt)
           draft: false
           prerelease: true

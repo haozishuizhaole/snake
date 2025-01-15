@@ -14,6 +14,11 @@ error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# 下载依赖
+info "Download go mod dependence..."
+go mod download
+info "Download go mod dependence successful!"
+
 # 创建构建目录
 BUILD_DIR="build"
 info "Creating build directory..."

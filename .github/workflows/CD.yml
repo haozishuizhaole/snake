@@ -16,11 +16,8 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Install dependencies
-        run: go mod download
-
-#      - name: Build
-#        run: sh build.sh
+      - name: Build
+        run: sh build.sh
 
       - name: Gather Release Information
         id: release_info

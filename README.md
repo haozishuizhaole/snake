@@ -14,6 +14,12 @@
 
 </div>
 
+## 截图
+
+![欢迎页](screenshots/welcome.png)
+
+![游戏页](screenshots/game.png)
+
 ## 功能特点
 
 - 经典贪吃蛇玩法
